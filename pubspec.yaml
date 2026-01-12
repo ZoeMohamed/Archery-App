@@ -1,0 +1,35 @@
+name: al_ihsan_archery
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  intl: ^0.18.0
+  shared_preferences: ^2.2.0
+  image_picker: ^1.0.7
+  supabase_flutter: ^2.5.0
+  http: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "image/logo_Alihsan Archery.png"
+  remove_alpha_ios: true
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - image/logo_Alihsan Archery.png
+    - image/image bantalan Target backround.jpg
