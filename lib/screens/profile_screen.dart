@@ -44,63 +44,82 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final userData = UserData();
       await userData.loadData();
 
-      // Fetch fresh data from Supabase if user is logged in
-      if (userData.userId.isNotEmpty) {
-        final response = await Supabase.instance.client
-            .from('users')
-            .select('*')
-            .eq('id', userData.userId)
-            .maybeSingle();
+      print('Profile: Loading user data...');
+      print('Profile: userId = ${userData.userId}');
+      print('Profile: role = ${userData.role}');
+      print('Profile: isMember = ${userData.isMember}');
+      print('Profile: isDemoMode = ${userData.isDemoMode}');
 
-        if (response != null) {
-          // Update UserData with fresh data from Supabase
-          userData.namaLengkap = response['full_name'] ?? '';
-          userData.email = response['email'] ?? '';
-          userData.nomorTelepon = response['phone_number'] ?? '';
-          userData.role = response['role'] ?? 'non_member';
-          userData.isCoach = response['is_coach'] ?? false;
-          userData.memberNumber = response['member_number'] ?? '';
-          userData.memberStatus = response['member_status'] ?? '';
+      // Only fetch from Supabase if NOT in demo mode and user is logged in
+      if (!userData.isDemoMode && userData.userId.isNotEmpty) {
+        try {
+          final response = await Supabase.instance.client
+              .from('users')
+              .select('*')
+              .eq('id', userData.userId)
+              .maybeSingle();
 
-          // Parse birth date if available
-          if (response['birth_date'] != null) {
-            try {
-              final birthDate = DateTime.parse(response['birth_date']);
-              userData.tanggalLahir = DateFormat(
-                'dd/MM/yyyy',
-              ).format(birthDate);
+          if (response != null) {
+            // Update UserData with fresh data from Supabase
+            userData.namaLengkap = response['full_name'] ?? '';
+            userData.email = response['email'] ?? '';
+            userData.nomorTelepon = response['phone_number'] ?? '';
+            userData.role = response['role'] ?? 'non_member';
+            userData.isCoach = response['is_coach'] ?? false;
+            userData.memberNumber = response['member_number'] ?? '';
+            userData.memberStatus = response['member_status'] ?? '';
 
-              // Calculate kategori from age
-              final age = DateTime.now().year - birthDate.year;
-              if (age < 9) {
-                userData.kategori = 'U9';
-              } else if (age < 12) {
-                userData.kategori = 'U12';
-              } else if (age < 15) {
-                userData.kategori = 'U15';
-              } else {
-                userData.kategori = 'Dewasa';
+            // Parse birth date if available
+            if (response['birth_date'] != null) {
+              try {
+                final birthDate = DateTime.parse(response['birth_date']);
+                userData.tanggalLahir = DateFormat(
+                  'dd/MM/yyyy',
+                ).format(birthDate);
+
+                // Calculate kategori from age
+                final age = DateTime.now().year - birthDate.year;
+                if (age < 9) {
+                  userData.kategori = 'U9';
+                } else if (age < 12) {
+                  userData.kategori = 'U12';
+                } else if (age < 15) {
+                  userData.kategori = 'U15';
+                } else {
+                  userData.kategori = 'Dewasa';
+                }
+              } catch (e) {
+                print('Error parsing birth date: $e');
               }
-            } catch (e) {
-              print('Error parsing birth date: $e');
             }
+
+            // Determine membership status
+            userData.isMember =
+                userData.role == 'member' || userData.role == 'admin';
+
+            // Save updated data locally
+            await userData.saveData();
+            print(
+              'Profile: Updated from Supabase - role=${userData.role}, isMember=${userData.isMember}',
+            );
           }
-
-          // Determine membership status
-          userData.isMember =
-              userData.role == 'member' || userData.role == 'admin';
-
-          // Save updated data locally
-          await userData.saveData();
+        } catch (supabaseError) {
+          print('Supabase fetch failed, using local data: $supabaseError');
         }
+      } else if (userData.isDemoMode) {
+        print('Profile: Demo mode active, using local data');
       }
 
-      // Update UI with loaded data
+      // Update UI with loaded data (from local storage or Supabase)
       if (mounted) {
+        print(
+          'Profile: Final values - role=${userData.role}, isMember=${userData.isMember}',
+        );
+        
         _namaLengkapController.text = userData.namaLengkap;
-        _namaPenggunaController.text = userData.email.split(
-          '@',
-        )[0]; // Username from email
+        _namaPenggunaController.text = userData.email.isNotEmpty 
+            ? userData.email.split('@')[0] 
+            : userData.namaPengguna;
         _emailController.text = userData.email;
         _noTeleponController.text = userData.nomorTelepon;
         _tanggalLahirController.text = userData.tanggalLahir;
@@ -110,6 +129,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _isMember = userData.isMember;
           _isLoading = false;
         });
+        
+        print('Profile: UI updated with _isMember = $_isMember');
       }
     } catch (e) {
       print('Error loading user data: $e');

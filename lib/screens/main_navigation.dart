@@ -23,12 +23,32 @@ class _MainNavigationState extends State<MainNavigation> {
     super.initState();
     _loadUserData();
   }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh user data when dependencies change (e.g., returning from another screen)
+    _refreshUserData();
+  }
 
   Future<void> _loadUserData() async {
     await UserData().loadData();
-    setState(() {
-      _isMember = UserData().isMember;
-    });
+    if (mounted) {
+      setState(() {
+        _isMember = UserData().isMember;
+      });
+    }
+  }
+  
+  Future<void> _refreshUserData() async {
+    // Just reload from local storage without resetting anything
+    final userData = UserData();
+    await userData.loadData();
+    if (mounted) {
+      setState(() {
+        _isMember = userData.isMember;
+      });
+    }
   }
 
   List<Widget> get _screens => [
@@ -69,9 +89,16 @@ class _MainNavigationState extends State<MainNavigation> {
                         ? const KtaCardScreen()
                         : const UploadKtaScreen(),
                   ),
-                ).then((_) {
-                  // Refresh member status when returning
-                  _loadUserData();
+                ).then((targetIndex) {
+                  // Refresh member status when returning (without resetting)
+                  _refreshUserData();
+                  
+                  // If a target index was returned, navigate to that tab
+                  if (targetIndex != null && targetIndex is int && targetIndex != 2) {
+                    setState(() {
+                      _currentIndex = targetIndex;
+                    });
+                  }
                 });
               } else {
                 setState(() {
@@ -115,9 +142,16 @@ class _MainNavigationState extends State<MainNavigation> {
                         ? const KtaCardScreen()
                         : const UploadKtaScreen(),
                   ),
-                ).then((_) {
-                  // Refresh member status when returning
-                  _loadUserData();
+                ).then((targetIndex) {
+                  // Refresh member status when returning (without resetting)
+                  _refreshUserData();
+                  
+                  // If a target index was returned, navigate to that tab
+                  if (targetIndex != null && targetIndex is int && targetIndex != 2) {
+                    setState(() {
+                      _currentIndex = targetIndex;
+                    });
+                  }
                 });
               },
               child: Transform.rotate(

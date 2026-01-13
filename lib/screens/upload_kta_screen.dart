@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 import 'verification_status_screen.dart';
-import 'profile_screen.dart';
-import 'dashboard_non_member.dart';
-import 'archer_scoring_screen.dart';
-import 'setup_training_screen.dart';
 import '../utils/user_data.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -458,76 +454,95 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
           ),
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF10B982),
-        unselectedItemColor: const Color(0xFF9CA3AF),
-        backgroundColor: Colors.white,
-        elevation: 8,
-        currentIndex: 2,
-        showSelectedLabels: true,
-        showUnselectedLabels: true,
-        selectedLabelStyle: const TextStyle(
-          fontWeight: FontWeight.w600,
-          fontSize: 12,
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontWeight: FontWeight.w500,
-          fontSize: 12,
-        ),
-        items: [
-          _buildNavItem(Icons.dashboard_outlined, Icons.dashboard, 'Home'),
-          _buildNavItem(
-            Icons.sports_score_outlined,
-            Icons.sports_score,
-            'Latihan',
+      bottomNavigationBar: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            selectedItemColor: const Color(0xFF10B982),
+            unselectedItemColor: const Color(0xFF9CA3AF),
+            selectedFontSize: 12,
+            unselectedFontSize: 12,
+            currentIndex: 2, // KTA is at index 2 (center button)
+            onTap: (index) {
+              if (index == 2) return; // Already on Upload KTA screen
+              
+              // Pop back to MainNavigation with the target index
+              Navigator.pop(context, index);
+            },
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(Icons.dashboard),
+                label: 'Dashboard',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.flag_outlined),
+                label: 'Latihan',
+              ),
+              BottomNavigationBarItem(
+                icon: SizedBox(height: 24), // Placeholder for center button
+                label: '',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.history),
+                label: 'Riwayat\nLatihan',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(Icons.person_outline),
+                label: 'Profil',
+              ),
+            ],
           ),
-          _buildNavItem(
-            Icons.card_membership_outlined,
-            Icons.card_membership,
-            'KTA',
+          // Floating center button with diamond shape
+          Positioned(
+            top: -30,
+            left: MediaQuery.of(context).size.width / 2 - 37,
+            child: Transform.rotate(
+              angle: 0.785398, // 45 degrees in radians (π/4)
+              child: Container(
+                width: 70,
+                height: 70,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B982),
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF10B982).withOpacity(0.3),
+                      blurRadius: 20,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: Transform.rotate(
+                  angle: -0.785398, // Rotate content back
+                  child: const Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.card_membership,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'KTA',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          height: 1.0,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
-          _buildNavItem(Icons.history_outlined, Icons.history, 'Riwayat'),
-          _buildNavItem(Icons.person_outline, Icons.person, 'Profil'),
         ],
-        onTap: (index) {
-          if (index == 2) return;
-
-          Widget destination;
-          switch (index) {
-            case 0:
-              destination = const DashboardNonMember();
-              break;
-            case 1:
-              destination = const SetupTrainingScreen();
-              break;
-            case 3:
-              destination = const ArcherScoringScreen();
-              break;
-            case 4:
-              destination = const ProfileScreen();
-              break;
-            default:
-              return;
-          }
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => destination),
-          );
-        },
       ),
-    );
-  }
-
-  BottomNavigationBarItem _buildNavItem(
-    IconData icon,
-    IconData activeIcon,
-    String label,
-  ) {
-    return BottomNavigationBarItem(
-      icon: Icon(icon),
-      activeIcon: Icon(activeIcon),
-      label: label,
     );
   }
 }

@@ -31,6 +31,9 @@ class UserData {
   bool isCoach = false;
   String memberStatus = ''; // active, inactive
   String memberNumber = '';
+  
+  // Demo mode flag - prevents Supabase from overriding local toggle
+  bool isDemoMode = false;
 
   // Load data from SharedPreferences
   Future<void> loadData() async {
@@ -55,6 +58,12 @@ class UserData {
     isCoach = prefs.getBool('isCoach') ?? false;
     memberStatus = prefs.getString('memberStatus') ?? '';
     memberNumber = prefs.getString('memberNumber') ?? '';
+    isDemoMode = prefs.getBool('isDemoMode') ?? false;
+    
+    // Ensure isMember is in sync with role
+    if (!isDemoMode) {
+      isMember = role == 'member' || role == 'admin';
+    }
   }
 
   // Save data to SharedPreferences
@@ -73,6 +82,7 @@ class UserData {
     await prefs.setBool('isCoach', isCoach);
     await prefs.setString('memberStatus', memberStatus);
     await prefs.setString('memberNumber', memberNumber);
+    await prefs.setBool('isDemoMode', isDemoMode);
     await prefs.setString('password', password);
     await prefs.setBool('isMember', isMember);
     await prefs.setString('ktaStatus', ktaStatus);
@@ -95,19 +105,6 @@ class UserData {
     } else if (age < 12) {
       return 'U12';
     } else if (age < 15) {
-    isMember = false;
-    ktaStatus = 'none';
-    membershipNumber = '';
-    membershipValidFrom = '';
-    membershipValidUntil = '';
-    ktaImagePath = '';
-    
-    // Clear Supabase fields
-    userId = '';
-    role = 'non_member';
-    isCoach = false;
-    memberStatus = '';
-    memberNumber = '';
       return 'U15';
     } else {
       return 'Dewasa';
@@ -122,6 +119,21 @@ class UserData {
     tanggalLahir = '';
     kategori = '';
     password = '';
+    
+    isMember = false;
+    ktaStatus = 'none';
+    membershipNumber = '';
+    membershipValidFrom = '';
+    membershipValidUntil = '';
+    ktaImagePath = '';
+    
+    // Clear Supabase fields
+    userId = '';
+    role = 'non_member';
+    isCoach = false;
+    memberStatus = '';
+    memberNumber = '';
+    isDemoMode = false;
     
     // Clear from SharedPreferences
     final prefs = await SharedPreferences.getInstance();
