@@ -2,17 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:intl/intl.dart';
-import '../dashboard_non_member.dart';
-import '../profile_screen.dart';
-import '../archer_scoring_screen.dart';
-import '../setup_training_screen.dart';
-import '../kta_card_screen.dart';
 
-enum PaymentStatus {
-  pending,
-  approved,
-  rejected,
-}
+enum PaymentStatus { pending, approved, rejected }
 
 class PaymentRecord {
   final String id;
@@ -102,10 +93,7 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
         ),
         title: const Text(
           'Pembayaran',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
@@ -119,10 +107,7 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF10B982),
-                  Color(0xFF059669),
-                ],
+                colors: [Color(0xFF10B982), Color(0xFF059669)],
               ),
             ),
             child: Column(
@@ -142,10 +127,7 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
                 const SizedBox(height: 16),
                 const Text(
                   'Iuran Bulanan',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white70,
-                  ),
+                  style: TextStyle(fontSize: 16, color: Colors.white70),
                 ),
                 const SizedBox(height: 8),
                 const Text(
@@ -206,62 +188,6 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
         backgroundColor: const Color(0xFF10B982),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF10B982),
-        unselectedItemColor: const Color(0xFF9CA3AF),
-        currentIndex: 2,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.sports_score),
-            label: 'Latihan',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.card_membership),
-            label: 'KTA',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history),
-            label: 'Riwayat',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profil',
-          ),
-        ],
-        onTap: (index) {
-          Widget destination;
-          
-          switch (index) {
-            case 0:
-              destination = const DashboardNonMember();
-              break;
-            case 1:
-              destination = const SetupTrainingScreen();
-              break;
-            case 2:
-              destination = const KtaCardScreen();
-              break;
-            case 3:
-              destination = const ArcherScoringScreen();
-              break;
-            case 4:
-              destination = const ProfileScreen();
-              break;
-            default:
-              return;
-          }
-          
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => destination),
-          );
-        },
-      ),
     );
   }
 
@@ -321,11 +247,7 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(
-                        Icons.payment,
-                        color: statusColor,
-                        size: 24,
-                      ),
+                      child: Icon(Icons.payment, color: statusColor, size: 24),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -352,7 +274,10 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: statusColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
@@ -383,10 +308,7 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
                   children: [
                     const Text(
                       'Jumlah Pembayaran',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF6B7280),
-                      ),
+                      style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
                     ),
                     Text(
                       'Rp ${NumberFormat('#,###', 'id_ID').format(payment.amount)}',
@@ -473,7 +395,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         maxHeight: 1080,
         imageQuality: 85,
       );
-      
+
       if (image != null) {
         setState(() {
           _uploadedImage = image.path;
@@ -526,7 +448,9 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Pembayaran berhasil diajukan! Menunggu verifikasi admin.'),
+          content: Text(
+            'Pembayaran berhasil diajukan! Menunggu verifikasi admin.',
+          ),
           backgroundColor: Color(0xFF10B982),
           duration: Duration(seconds: 2),
         ),
@@ -547,10 +471,7 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
         ),
         title: const Text(
           'Bayar Iuran',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
@@ -709,7 +630,8 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                                       ),
                                       child: const Center(
                                         child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Icon(
                                               Icons.check_circle,
@@ -794,11 +716,16 @@ class _PaymentFormScreenState extends State<PaymentFormScreen> {
                           hintStyle: const TextStyle(color: Color(0xFF9CA3AF)),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFFE5E7EB),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
-                            borderSide: const BorderSide(color: Color(0xFF10B982), width: 2),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF10B982),
+                              width: 2,
+                            ),
                           ),
                           contentPadding: const EdgeInsets.all(16),
                         ),
@@ -899,8 +826,14 @@ class _PaymentDetailSheetState extends State<PaymentDetailSheet> {
               const SizedBox(height: 20),
               // Payment Info
               _buildDetailRow('ID Pembayaran', widget.payment.id),
-              _buildDetailRow('Tanggal', DateFormat('dd MMMM yyyy').format(widget.payment.date)),
-              _buildDetailRow('Jumlah', 'Rp ${NumberFormat('#,###', 'id_ID').format(widget.payment.amount)}'),
+              _buildDetailRow(
+                'Tanggal',
+                DateFormat('dd MMMM yyyy').format(widget.payment.date),
+              ),
+              _buildDetailRow(
+                'Jumlah',
+                'Rp ${NumberFormat('#,###', 'id_ID').format(widget.payment.amount)}',
+              ),
               if (widget.payment.comment.isNotEmpty)
                 _buildDetailRow('Komentar', widget.payment.comment),
               const SizedBox(height: 20),
@@ -962,7 +895,8 @@ class _PaymentDetailSheetState extends State<PaymentDetailSheet> {
                               widget.onStatusChanged(_currentStatus);
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _currentStatus == PaymentStatus.pending
+                              backgroundColor:
+                                  _currentStatus == PaymentStatus.pending
                                   ? const Color(0xFFF59E0B)
                                   : Colors.grey[300],
                               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -991,7 +925,8 @@ class _PaymentDetailSheetState extends State<PaymentDetailSheet> {
                               widget.onStatusChanged(_currentStatus);
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _currentStatus == PaymentStatus.approved
+                              backgroundColor:
+                                  _currentStatus == PaymentStatus.approved
                                   ? const Color(0xFF10B982)
                                   : Colors.grey[300],
                               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1020,7 +955,8 @@ class _PaymentDetailSheetState extends State<PaymentDetailSheet> {
                               widget.onStatusChanged(_currentStatus);
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _currentStatus == PaymentStatus.rejected
+                              backgroundColor:
+                                  _currentStatus == PaymentStatus.rejected
                                   ? const Color(0xFFEF4444)
                                   : Colors.grey[300],
                               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1082,10 +1018,7 @@ class _PaymentDetailSheetState extends State<PaymentDetailSheet> {
             width: 120,
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
             ),
           ),
           const Text(': ', style: TextStyle(color: Color(0xFF6B7280))),

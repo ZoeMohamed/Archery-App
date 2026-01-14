@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'setup_training_screen.dart';
 import 'training_result_screen.dart';
 import '../utils/training_data.dart';
 
@@ -81,74 +80,6 @@ class _ArcherScoringScreenState extends State<ArcherScoringScreen> {
                 return _buildTrainingCard(session);
               },
             ),
-      floatingActionButton: Padding(
-        padding: const EdgeInsets.all(16),
-        child: SizedBox(
-          width: double.infinity,
-          height: 120,
-          child: ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const SetupTrainingScreen(),
-                ),
-              ).then((_) => setState(() {}));
-            },
-            style: ElevatedButton.styleFrom(
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                image: const DecorationImage(
-                  image: AssetImage(
-                    'image/image bantalan Target backround.jpg',
-                  ),
-                  fit: BoxFit.cover,
-                ),
-              ),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withOpacity(0.4),
-                      Colors.black.withOpacity(0.6),
-                    ],
-                  ),
-                ),
-                alignment: Alignment.center,
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.add_circle_outline,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                    SizedBox(width: 12),
-                    Text(
-                      'Mulai Latihan',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
 
@@ -196,7 +127,7 @@ class _ArcherScoringScreenState extends State<ArcherScoringScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${session.numberOfRounds} Rounds • ${session.arrowsPerRound} Arrows/Round',
+                  '${session.numberOfRounds} Rambahan • ${session.arrowsPerRound} Arrows/Rambahan',
                   style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 8),

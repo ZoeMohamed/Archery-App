@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'profile_screen.dart';
 import 'upload_kta_screen.dart';
-import 'archer_scoring_screen.dart';
-import 'setup_training_screen.dart';
 import 'kta_card_screen.dart';
 import 'Mamber/pembayaran_screen.dart';
+import 'Mamber/notifikasi_screen.dart';
+import 'Mamber/lomba_screen.dart';
+import 'Mamber/kelas_screen.dart';
 import '../utils/user_data.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -35,6 +35,12 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
     _loadUserData();
   }
 
+  Future<String> _getCurrentRole() async {
+    final userData = UserData();
+    await userData.loadData();
+    return userData.role;
+  }
+
   Future<void> _loadUserData() async {
     setState(() => _isLoading = true);
 
@@ -46,9 +52,10 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
       print('Dashboard: userId = ${userData.userId}');
       print('Dashboard: role = ${userData.role}');
       print('Dashboard: isMember = ${userData.isMember}');
+      print('Dashboard: isDemoMode = ${userData.isDemoMode}');
 
-      // Try to fetch fresh data from Supabase if user is logged in
-      if (userData.userId.isNotEmpty) {
+      // Only fetch from Supabase if NOT in demo mode and user is logged in
+      if (!userData.isDemoMode && userData.userId.isNotEmpty) {
         try {
           final response = await Supabase.instance.client
               .from('users')
@@ -76,14 +83,12 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
           print('Supabase fetch failed, using local data: $supabaseError');
           // Continue with local data if Supabase fails
         }
+      } else if (userData.isDemoMode) {
+        print('Dashboard: Demo mode active, using local data');
       }
 
-      // Update UI from local data (which may have been updated from Supabase or toggle)
+      // Update UI from local data
       if (mounted) {
-        // Ensure isMember is in sync with role
-        userData.isMember =
-            userData.role == 'member' || userData.role == 'admin';
-
         print(
           'Dashboard: Final values - role=${userData.role}, isMember=${userData.isMember}',
         );
@@ -339,14 +344,26 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                               ),
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              _isMember
-                                  ? 'Status: Member ✓'
-                                  : 'Status: Non-Member',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFF92400E),
-                              ),
+                            FutureBuilder<String>(
+                              future: _getCurrentRole(),
+                              builder: (context, snapshot) {
+                                final role = snapshot.data ?? 'non_member';
+                                String statusText;
+                                if (role == 'admin') {
+                                  statusText = 'Status: Admin ✓';
+                                } else if (role == 'member') {
+                                  statusText = 'Status: Member ✓';
+                                } else {
+                                  statusText = 'Status: Non-Member';
+                                }
+                                return Text(
+                                  statusText,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF92400E),
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -354,24 +371,51 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       Switch(
                         value: _isMember,
                         onChanged: (value) async {
+                          final userData = UserData();
+
+                          // Enable demo mode when toggling
+                          userData.isDemoMode = true;
+                          userData.isMember = value;
+                          userData.role = value
+                              ? 'admin'
+                              : 'non_member'; // Set to admin when enabled
+
+                          // If switching to member in demo mode, set up demo membership data
+                          if (value && userData.membershipNumber.isEmpty) {
+                            final now = DateTime.now();
+                            final random = now.millisecondsSinceEpoch % 10000;
+                            userData.membershipNumber =
+                                'AIA-${now.year}-${random.toString().padLeft(4, '0')}';
+                            userData.membershipValidFrom = '01/01/${now.year}';
+                            userData.membershipValidUntil =
+                                '31/12/${now.year + 1}';
+                            userData.ktaStatus = 'approved';
+
+                            // Set demo KTA data if not exists
+                            if (userData.namaLengkap.isEmpty) {
+                              userData.namaLengkap = 'Demo Admin';
+                            }
+                            if (userData.kategori.isEmpty) {
+                              userData.kategori = 'Dewasa';
+                            }
+                          }
+
+                          await userData.saveData();
+
+                          print(
+                            'Dashboard Toggle: isDemoMode=true, role=${userData.role}, isMember=${userData.isMember}',
+                          );
+
                           setState(() {
                             _isMember = value;
                           });
-                          print('Dashboard Toggle: Changed to $value');
-                          final userData = UserData();
-                          userData.isMember = value;
-                          userData.role = value ? 'member' : 'non_member';
-                          await userData.saveData();
-                          print(
-                            'Dashboard Toggle: Saved - role=${userData.role}, isMember=${userData.isMember}',
-                          );
 
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
                                   value
-                                      ? '✓ Fitur Member Dibuka'
+                                      ? '✓ Fitur Admin Dibuka (Demo Mode)'
                                       : '✗ Fitur Member Dikunci',
                                 ),
                                 backgroundColor: value
@@ -540,6 +584,21 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const PembayaranScreen()),
+          );
+        } else if (title == 'Notifikasi') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const NotifikasiScreen()),
+          );
+        } else if (title == 'Lomba') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LombaScreen()),
+          );
+        } else if (title == 'Absensi') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const KelasScreen()),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(

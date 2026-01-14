@@ -2,10 +2,41 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/training_data.dart';
 
-class TrainingResultScreen extends StatelessWidget {
+class TrainingResultScreen extends StatefulWidget {
   final TrainingSession session;
 
   const TrainingResultScreen({super.key, required this.session});
+
+  @override
+  State<TrainingResultScreen> createState() => _TrainingResultScreenState();
+}
+
+class _TrainingResultScreenState extends State<TrainingResultScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  int _selectedPlayerIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(
+      length: widget.session.numberOfPlayers,
+      vsync: this,
+    );
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() {
+          _selectedPlayerIndex = _tabController.index;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,12 +53,30 @@ class TrainingResultScreen extends StatelessWidget {
         ),
         title: const Text(
           'Training Results',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         centerTitle: false,
+        bottom: widget.session.numberOfPlayers > 1
+            ? TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                indicatorColor: Colors.white,
+                indicatorWeight: 3,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white70,
+                labelStyle: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.normal,
+                ),
+                tabs: widget.session.playerNames.map((name) {
+                  return Tab(text: name);
+                }).toList(),
+              )
+            : null,
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -40,10 +89,7 @@ class TrainingResultScreen extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFF10B982),
-                    Color(0xFF059669),
-                  ],
+                  colors: [Color(0xFF10B982), Color(0xFF059669)],
                 ),
               ),
               child: Column(
@@ -63,7 +109,7 @@ class TrainingResultScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   Text(
-                    'Training ${DateFormat('d/M/yyyy').format(session.date)}',
+                    'Training ${DateFormat('d/M/yyyy').format(widget.session.date)}',
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -72,20 +118,15 @@ class TrainingResultScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    DateFormat('d/M/yyyy').format(session.date),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white70,
-                    ),
+                    DateFormat('d/M/yyyy').format(widget.session.date),
+                    style: const TextStyle(fontSize: 16, color: Colors.white70),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
-            // Player Results - Loop untuk semua player
-            ...session.playerNames.map((playerName) {
-              return _buildPlayerStats(playerName);
-            }).toList(),
+            // Player Results - Show only selected player
+            _buildPlayerStats(widget.session.playerNames[_selectedPlayerIndex]),
             const SizedBox(height: 20),
           ],
         ),
@@ -94,14 +135,15 @@ class TrainingResultScreen extends StatelessWidget {
   }
 
   Widget _buildPlayerStats(String playerName) {
-    final totalScore = session.getTotalScore(playerName);
-    final avgScore = session.getAverageScore(playerName);
-    final totalArrows = session.numberOfRounds * session.arrowsPerRound;
-    
+    final totalScore = widget.session.getTotalScore(playerName);
+    final avgScore = widget.session.getAverageScore(playerName);
+    final totalArrows =
+        widget.session.numberOfRounds * widget.session.arrowsPerRound;
+
     // Calculate accuracy
     int hitCount = 0;
-    for (int round = 0; round < session.numberOfRounds; round++) {
-      final roundScores = session.scores[playerName]?[round] ?? [];
+    for (int round = 0; round < widget.session.numberOfRounds; round++) {
+      final roundScores = widget.session.scores[playerName]?[round] ?? [];
       for (var score in roundScores) {
         if (score != 'M') hitCount++;
       }
@@ -111,19 +153,6 @@ class TrainingResultScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (session.numberOfPlayers > 1)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(
-              playerName,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF10B982),
-              ),
-            ),
-          ),
-        if (session.numberOfPlayers > 1) const SizedBox(height: 12),
         // Stats Grid
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -174,7 +203,7 @@ class TrainingResultScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Round Details',
+                'Detail per Rambahan',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -183,7 +212,7 @@ class TrainingResultScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               // Round Cards
-              ...List.generate(session.numberOfRounds, (roundIndex) {
+              ...List.generate(widget.session.numberOfRounds, (roundIndex) {
                 return _buildRoundCard(roundIndex, playerName);
               }),
             ],
@@ -235,10 +264,7 @@ class TrainingResultScreen extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               label,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-              ),
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
               textAlign: TextAlign.center,
               maxLines: 1,
             ),
@@ -249,12 +275,14 @@ class TrainingResultScreen extends StatelessWidget {
   }
 
   Widget _buildRoundCard(int roundIndex, String playerName) {
-    final roundScores = session.scores[playerName]?[roundIndex] ?? [];
+    final roundScores = widget.session.scores[playerName]?[roundIndex] ?? [];
     int roundTotal = 0;
     for (var score in roundScores) {
-      roundTotal += session.convertScoreToInt(score);
+      roundTotal += widget.session.convertScoreToInt(score);
     }
-    final roundAvg = roundScores.isNotEmpty ? roundTotal / roundScores.length : 0;
+    final roundAvg = roundScores.isNotEmpty
+        ? roundTotal / roundScores.length
+        : 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -277,7 +305,7 @@ class TrainingResultScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Round ${roundIndex + 1}',
+                'Rambahan ${roundIndex + 1}',
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -285,7 +313,10 @@ class TrainingResultScreen extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFD1FAE5),
                   borderRadius: BorderRadius.circular(20),
@@ -313,10 +344,7 @@ class TrainingResultScreen extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             'Average: ${roundAvg.toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
+            style: const TextStyle(fontSize: 14, color: Colors.grey),
           ),
         ],
       ),
@@ -326,7 +354,7 @@ class TrainingResultScreen extends StatelessWidget {
   Widget _buildScoreBox(String score) {
     Color bgColor;
     Color textColor = Colors.white;
-    
+
     switch (score) {
       case 'X':
       case '9':
@@ -353,14 +381,14 @@ class TrainingResultScreen extends StatelessWidget {
         bgColor = const Color(0xFF9CA3AF); // Grey
         break;
     }
-    
+
     return Container(
       width: 60,
       height: 60,
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
-        border: score == '2' || score == '1' 
+        border: score == '2' || score == '1'
             ? Border.all(color: Colors.grey, width: 2)
             : null,
       ),

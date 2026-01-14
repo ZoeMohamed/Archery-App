@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'dashboard_non_member.dart';
+import 'main_navigation.dart';
 import '../utils/user_data.dart';
 import 'package:intl/intl.dart';
 
@@ -32,7 +32,7 @@ class _VerificationStatusScreenState extends State<VerificationStatusScreen> {
           onPressed: () {
             Navigator.pushAndRemoveUntil(
               context,
-              MaterialPageRoute(builder: (context) => const DashboardNonMember()),
+              MaterialPageRoute(builder: (context) => const MainNavigation()),
               (route) => false,
             );
           },
@@ -168,10 +168,12 @@ class _VerificationStatusScreenState extends State<VerificationStatusScreen> {
                                 _status = VerificationStatus.approved;
                               });
                               
-                              // Activate membership
+                              // Activate membership as ADMIN
                               final userData = UserData();
                               userData.isMember = true;
                               userData.ktaStatus = 'approved';
+                              userData.role = 'admin'; // Set role to ADMIN (bukan member)
+                              userData.isDemoMode = true; // Enable demo mode for manual approval
                               
                               // Generate membership number (format: AIA-YYYY-XXXX)
                               final now = DateTime.now();
@@ -184,8 +186,18 @@ class _VerificationStatusScreenState extends State<VerificationStatusScreen> {
                               userData.membershipValidFrom = DateFormat('dd/MM/yyyy').format(validFrom);
                               userData.membershipValidUntil = DateFormat('dd/MM/yyyy').format(validUntil);
                               
+                              // Set demo data if not exists
+                              if (userData.namaLengkap.isEmpty) {
+                                userData.namaLengkap = 'Demo Member';
+                              }
+                              if (userData.kategori.isEmpty) {
+                                userData.kategori = 'Dewasa';
+                              }
+                              
                               // Save to SharedPreferences
                               await userData.saveData();
+                              
+                              print('Verification: Approved - isDemoMode=true, role=admin, isMember=true');
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF10B982),
@@ -232,7 +244,7 @@ class _VerificationStatusScreenState extends State<VerificationStatusScreen> {
                 onPressed: () {
                   Navigator.pushAndRemoveUntil(
                     context,
-                    MaterialPageRoute(builder: (context) => const DashboardNonMember()),
+                    MaterialPageRoute(builder: (context) => const MainNavigation()),
                     (route) => false,
                   );
                 },

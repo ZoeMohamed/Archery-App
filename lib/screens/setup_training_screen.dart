@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'input_scoring_screen.dart';
+import 'training_confirmation_screen.dart';
 import '../utils/training_data.dart';
 
 class SetupTrainingScreen extends StatefulWidget {
@@ -83,12 +83,12 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       session.scores[name] = [];
     }
 
-    TrainingData().currentSession = session;
-
-    // Navigate to scoring screen
+    // Navigate to confirmation screen
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const InputScoringScreen()),
+      MaterialPageRoute(
+        builder: (context) => TrainingConfirmationScreen(session: session),
+      ),
     );
   }
 
@@ -205,9 +205,9 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                   ),
                 ),
               if (_numberOfPlayers > 1) const SizedBox(height: 16),
-              // Jumlah Ronde
+              // Jumlah Rambahan
               _buildNumberSelector(
-                label: 'Jumlah Ronde',
+                label: 'Jumlah Rambahan',
                 value: _numberOfRounds,
                 min: 1,
                 max: 20,
@@ -218,9 +218,9 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                 },
               ),
               const SizedBox(height: 16),
-              // Jumlah Arrow per Ronde
+              // Jumlah Arrow per Rambahan
               _buildNumberSelector(
-                label: 'Jumlah Arrow per Ronde',
+                label: 'Jumlah Arrow per Rambahan',
                 value: _arrowsPerRound,
                 min: 1,
                 max: 12,
@@ -355,7 +355,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                     elevation: 3,
                   ),
                   child: const Text(
-                    'Konfirmasi & Mulai Scoring',
+                    'Lanjutkan',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -391,7 +391,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
           Icon(
             label.contains('Pemain')
                 ? Icons.people
-                : label.contains('Ronde')
+                : label.contains('Rambahan')
                 ? Icons.repeat
                 : Icons.arrow_forward,
             color: const Color(0xFF10B982),
