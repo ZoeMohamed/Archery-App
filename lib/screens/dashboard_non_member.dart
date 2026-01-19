@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'upload_kta_screen.dart';
 import 'kta_card_screen.dart';
@@ -21,6 +23,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
   bool _isLoading = true;
   bool _isMember = false;
   String _userName = 'Pemanah';
+  String _activeRole = 'non_member';
 
   @override
   void initState() {
@@ -35,11 +38,6 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
     _loadUserData();
   }
 
-  Future<String> _getCurrentRole() async {
-    final userData = UserData();
-    await userData.loadData();
-    return userData.role;
-  }
 
   Future<void> _loadUserData() async {
     setState(() => _isLoading = true);
@@ -54,24 +52,38 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
       print('Dashboard: isMember = ${userData.isMember}');
       print('Dashboard: isDemoMode = ${userData.isDemoMode}');
 
-      // Only fetch from Supabase if NOT in demo mode and user is logged in
-      if (!userData.isDemoMode && userData.userId.isNotEmpty) {
+      final authUser = Supabase.instance.client.auth.currentUser;
+      final supabaseUserId =
+          userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+
+      // Always fetch from Supabase when user id is available
+      if (supabaseUserId.isNotEmpty) {
         try {
           final response = await Supabase.instance.client
               .from('users')
               .select('*')
-              .eq('id', userData.userId)
+              .eq('id', supabaseUserId)
               .maybeSingle();
 
           if (response != null) {
+            final roles = _parseRoles(response['roles']);
+            final activeRole =
+                response['active_role']?.toString() ??
+                (roles.isNotEmpty ? roles.first : 'non_member');
+            final normalizedRoles = [
+              ...roles,
+              if (activeRole.isNotEmpty && !roles.contains(activeRole))
+                activeRole,
+            ];
+
             // Update UserData with fresh data from Supabase
+            userData.userId = response['id']?.toString() ?? supabaseUserId;
             userData.namaLengkap = response['full_name'] ?? '';
             userData.email = response['email'] ?? '';
-            userData.role = response['role'] ?? 'non_member';
-
-            // Determine membership status from role
-            userData.isMember =
-                userData.role == 'member' || userData.role == 'admin';
+            userData.role = activeRole;
+            userData.isCoach = normalizedRoles.contains('coach');
+            userData.isMember = _hasMemberRole(normalizedRoles, activeRole);
+            userData.isDemoMode = false;
 
             // Save updated data locally
             await userData.saveData();
@@ -83,8 +95,6 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
           print('Supabase fetch failed, using local data: $supabaseError');
           // Continue with local data if Supabase fails
         }
-      } else if (userData.isDemoMode) {
-        print('Dashboard: Demo mode active, using local data');
       }
 
       // Update UI from local data
@@ -95,6 +105,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
 
         setState(() {
           _isMember = userData.isMember;
+          _activeRole = userData.role;
           // Use full name if available, otherwise use name from email, or default
           if (userData.namaLengkap.isNotEmpty) {
             _userName = userData.namaLengkap;
@@ -117,6 +128,83 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
       }
     }
   }
+
+  List<String> _parseRoles(dynamic value) {
+    if (value is List) {
+      return value
+          .map((item) => _normalizeRole(item.toString()))
+          .where((role) => role.isNotEmpty)
+          .toList();
+    }
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        return [];
+      }
+      if (trimmed.startsWith('[')) {
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is List) {
+            return decoded
+                .map((item) => _normalizeRole(item.toString()))
+                .where((role) => role.isNotEmpty)
+                .toList();
+          }
+        } catch (_) {}
+      }
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        final inner = trimmed.substring(1, trimmed.length - 1);
+        if (inner.trim().isEmpty) {
+          return [];
+        }
+        return inner
+            .split(',')
+            .map((item) => _normalizeRole(item))
+            .where((role) => role.isNotEmpty)
+            .toList();
+      }
+      final normalized = _normalizeRole(trimmed);
+      return normalized.isEmpty ? [] : [normalized];
+    }
+    return [];
+  }
+
+  String _normalizeRole(String value) {
+    var trimmed = value.trim();
+    if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 1) {
+      trimmed = trimmed.substring(1, trimmed.length - 1);
+    }
+    return trimmed.trim();
+  }
+
+  bool _hasMemberRole(List<String> roles, String activeRole) {
+    const memberRoles = {'member', 'admin', 'staff', 'coach'};
+    if (memberRoles.contains(activeRole)) {
+      return true;
+    }
+    return roles.any(memberRoles.contains);
+  }
+
+  bool _canAccessMenu(String key) {
+    switch (_activeRole) {
+      case 'admin':
+        return true;
+      case 'coach':
+        return key != 'pembayaran';
+      case 'staff':
+        return key == 'lomba' || key == 'pembayaran';
+      case 'member':
+        return true;
+      case 'non_member':
+      default:
+        return key == 'latihan' ||
+            key == 'profil' ||
+            key == 'riwayat' ||
+            key == 'kta';
+    }
+  }
+
+  bool get _isNonMember => _activeRole == 'non_member';
 
   @override
   Widget build(BuildContext context) {
@@ -188,8 +276,8 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Hero Card with Recommendation Badge (only show if not member)
-                if (!_isMember)
+                // Hero Card with Recommendation Badge (only show for non-member)
+                if (_isNonMember)
                   Stack(
                     children: [
                       Container(
@@ -303,134 +391,6 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       ),
                     ],
                   ),
-                if (!_isMember) const SizedBox(height: 24),
-
-                // DEBUG: Member Toggle Switch
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFEF3C7),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: const Color(0xFFF59E0B),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF59E0B),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(
-                          Icons.bug_report,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'DEBUG: Toggle Member Status',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF92400E),
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            FutureBuilder<String>(
-                              future: _getCurrentRole(),
-                              builder: (context, snapshot) {
-                                final role = snapshot.data ?? 'non_member';
-                                String statusText;
-                                if (role == 'admin') {
-                                  statusText = 'Status: Admin ✓';
-                                } else if (role == 'member') {
-                                  statusText = 'Status: Member ✓';
-                                } else {
-                                  statusText = 'Status: Non-Member';
-                                }
-                                return Text(
-                                  statusText,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF92400E),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      Switch(
-                        value: _isMember,
-                        onChanged: (value) async {
-                          final userData = UserData();
-
-                          // Enable demo mode when toggling
-                          userData.isDemoMode = true;
-                          userData.isMember = value;
-                          userData.role = value
-                              ? 'admin'
-                              : 'non_member'; // Set to admin when enabled
-
-                          // If switching to member in demo mode, set up demo membership data
-                          if (value && userData.membershipNumber.isEmpty) {
-                            final now = DateTime.now();
-                            final random = now.millisecondsSinceEpoch % 10000;
-                            userData.membershipNumber =
-                                'AIA-${now.year}-${random.toString().padLeft(4, '0')}';
-                            userData.membershipValidFrom = '01/01/${now.year}';
-                            userData.membershipValidUntil =
-                                '31/12/${now.year + 1}';
-                            userData.ktaStatus = 'approved';
-
-                            // Set demo KTA data if not exists
-                            if (userData.namaLengkap.isEmpty) {
-                              userData.namaLengkap = 'Demo Admin';
-                            }
-                            if (userData.kategori.isEmpty) {
-                              userData.kategori = 'Dewasa';
-                            }
-                          }
-
-                          await userData.saveData();
-
-                          print(
-                            'Dashboard Toggle: isDemoMode=true, role=${userData.role}, isMember=${userData.isMember}',
-                          );
-
-                          setState(() {
-                            _isMember = value;
-                          });
-
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  value
-                                      ? '✓ Fitur Admin Dibuka (Demo Mode)'
-                                      : '✗ Fitur Member Dikunci',
-                                ),
-                                backgroundColor: value
-                                    ? const Color(0xFF10B982)
-                                    : const Color(0xFF6B7280),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
-                          }
-                        },
-                        activeColor: const Color(0xFF10B982),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 24),
 
                 // Menu Utama
@@ -459,7 +419,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       subtitle: 'Akses penuh scoring',
                       color: const Color(0xFF10B982),
                       iconColor: Colors.white,
-                      isLocked: false,
+                      isLocked: !_canAccessMenu('latihan'),
                     ),
                     _buildMenuItem(
                       context,
@@ -468,18 +428,18 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       subtitle: 'Kelola data diri & foto',
                       color: const Color(0xFF6366F1),
                       iconColor: Colors.white,
-                      isLocked: false,
+                      isLocked: !_canAccessMenu('profil'),
                     ),
                     _buildMenuItem(
                       context,
                       icon: Icons.card_membership_outlined,
-                      title: _isMember ? 'KTA' : 'Pengajuan KTA',
-                      subtitle: _isMember
-                          ? 'Kartu anggota'
-                          : 'Daftar anggota resmi',
+                      title: _isNonMember ? 'Pengajuan KTA' : 'KTA',
+                      subtitle: _isNonMember
+                          ? 'Daftar anggota resmi'
+                          : 'Kartu anggota',
                       color: const Color(0xFFF59E0B),
                       iconColor: Colors.white,
-                      isLocked: false,
+                      isLocked: !_canAccessMenu('kta'),
                     ),
                     _buildMenuItem(
                       context,
@@ -488,7 +448,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       subtitle: 'Pantau progress latihan',
                       color: const Color(0xFF3B82F6),
                       iconColor: Colors.white,
-                      isLocked: false,
+                      isLocked: !_canAccessMenu('riwayat'),
                     ),
                     // Member-only features (locked for non-members)
                     _buildMenuItem(
@@ -498,7 +458,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       subtitle: 'Event & pengumuman',
                       color: const Color(0xFFEC4899),
                       iconColor: Colors.white,
-                      isLocked: !_isMember,
+                      isLocked: !_canAccessMenu('notifikasi'),
                     ),
                     _buildMenuItem(
                       context,
@@ -507,7 +467,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       subtitle: 'Pendaftaran lomba',
                       color: const Color(0xFF8B5CF6),
                       iconColor: Colors.white,
-                      isLocked: !_isMember,
+                      isLocked: !_canAccessMenu('lomba'),
                     ),
                     _buildMenuItem(
                       context,
@@ -516,7 +476,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       subtitle: 'Iuran & transaksi',
                       color: const Color(0xFF14B8A6),
                       iconColor: Colors.white,
-                      isLocked: !_isMember,
+                      isLocked: !_canAccessMenu('pembayaran'),
                     ),
                     _buildMenuItem(
                       context,
@@ -525,7 +485,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       subtitle: 'Presensi latihan',
                       color: const Color(0xFFF97316),
                       iconColor: Colors.white,
-                      isLocked: !_isMember,
+                      isLocked: !_canAccessMenu('absensi'),
                     ),
                   ],
                 ),
@@ -552,7 +512,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Fitur ini hanya tersedia untuk anggota. Silakan ajukan KTA terlebih dahulu.',
+                'Fitur ini tidak tersedia untuk role Anda saat ini.',
               ),
               backgroundColor: Color(0xFFF59E0B),
               duration: Duration(seconds: 2),

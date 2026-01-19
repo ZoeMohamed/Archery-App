@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../models/supabase/db_notification.dart';
 
 enum NotificationType { ktaExpired, monthlyFee, competition, general }
 
@@ -30,6 +33,8 @@ class NotifikasiScreen extends StatefulWidget {
 
 class _NotifikasiScreenState extends State<NotifikasiScreen> {
   List<NotificationItem> _notifications = [];
+  bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -37,48 +42,48 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
     _loadNotifications();
   }
 
-  void _loadNotifications() {
-    // Demo data
-    setState(() {
-      _notifications = [
-        NotificationItem(
-          id: 'notif-001',
-          title: 'KTA Akan Kadaluarsa',
-          message:
-              'KTA Anda akan kadaluarsa pada 31 Januari 2026. Silakan lakukan perpanjangan segera.',
-          date: DateTime(2026, 1, 14, 10, 30),
-          type: NotificationType.ktaExpired,
-          isRead: false,
-        ),
-        NotificationItem(
-          id: 'notif-002',
-          title: 'Pengingat Iuran Bulanan',
-          message:
-              'Iuran bulanan untuk bulan Januari 2026 sebesar Rp 100.000 belum dibayarkan. Segera lakukan pembayaran.',
-          date: DateTime(2026, 1, 13, 15, 20),
-          type: NotificationType.monthlyFee,
-          isRead: false,
-        ),
-        NotificationItem(
-          id: 'notif-003',
-          title: 'Pendaftaran Lomba Dibuka',
-          message:
-              'Pendaftaran Kejuaraan Daerah 2026 telah dibuka. Daftar sekarang dan tunjukkan kemampuan terbaikmu!',
-          date: DateTime(2026, 1, 12, 9, 0),
-          type: NotificationType.competition,
-          isRead: true,
-        ),
-        NotificationItem(
-          id: 'notif-004',
-          title: 'Informasi Latihan',
-          message:
-              'Latihan rutin akan diadakan setiap Sabtu dan Minggu pukul 07.00 - 10.00 WIB di lapangan utama.',
-          date: DateTime(2026, 1, 10, 14, 45),
-          type: NotificationType.general,
-          isRead: true,
-        ),
-      ];
-    });
+  Future<void> _loadNotifications() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      setState(() {
+        _notifications = [];
+        _isLoading = false;
+        _errorMessage = 'Silakan login untuk melihat notifikasi.';
+      });
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('notifications')
+          .select()
+          .or('user_id.eq.${user.id},user_id.is.null')
+          .order('created_at', ascending: false);
+      final rows = List<Map<String, dynamic>>.from(response);
+      final items = rows
+          .map((row) => _mapDbNotification(DbNotification.fromJson(row)))
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _notifications = items;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Gagal memuat notifikasi.';
+      });
+    }
   }
 
   void _markAsRead(int index) {
@@ -224,7 +229,28 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
           ),
           // Notifications List
           Expanded(
-            child: _notifications.isEmpty
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Color(0xFF10B982)),
+                    ),
+                  )
+                : _errorMessage != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            _errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      )
+                    : _notifications.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -410,7 +436,7 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
     } else if (difference.inDays < 7) {
       return '${difference.inDays} hari yang lalu';
     } else {
-      return DateFormat('dd MMM yyyy, HH:mm').format(date);
+      return DateFormat('dd MMM yyyy, HH:mm', 'id_ID').format(date);
     }
   }
 
@@ -453,7 +479,8 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  DateFormat('dd MMMM yyyy, HH:mm').format(notification.date),
+                  DateFormat('dd MMMM yyyy, HH:mm', 'id_ID')
+                      .format(notification.date),
                   style: const TextStyle(
                     fontSize: 14,
                     color: Color(0xFF9CA3AF),
@@ -494,5 +521,34 @@ class _NotifikasiScreenState extends State<NotifikasiScreen> {
         ),
       ),
     );
+  }
+
+  NotificationItem _mapDbNotification(DbNotification notification) {
+    final date = notification.createdAt ?? DateTime.now();
+    return NotificationItem(
+      id: notification.id ??
+          'notif-${date.millisecondsSinceEpoch}-${notification.title.hashCode}',
+      title: notification.title,
+      message: notification.message,
+      date: date,
+      type: _mapNotificationType(notification.type),
+      isRead: notification.isRead,
+    );
+  }
+
+  NotificationType _mapNotificationType(String type) {
+    final value = type.toLowerCase();
+    if (value.contains('kta')) {
+      return NotificationType.ktaExpired;
+    }
+    if (value.contains('payment') ||
+        value.contains('iuran') ||
+        value.contains('monthly')) {
+      return NotificationType.monthlyFee;
+    }
+    if (value.contains('competition') || value.contains('lomba')) {
+      return NotificationType.competition;
+    }
+    return NotificationType.general;
   }
 }

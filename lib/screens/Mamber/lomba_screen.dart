@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../models/supabase/db_views.dart';
 
 enum MedalType { gold, silver, bronze, participant }
 
@@ -7,6 +10,8 @@ class CompetitionAchievement {
   final String id;
   final String competitionName;
   final String category;
+  final List<String> winners;
+  final String? imageUrl;
   final DateTime date;
   final String location;
   final MedalType medal;
@@ -18,6 +23,8 @@ class CompetitionAchievement {
     required this.id,
     required this.competitionName,
     required this.category,
+    this.winners = const [],
+    this.imageUrl,
     required this.date,
     required this.location,
     required this.medal,
@@ -37,6 +44,8 @@ class LombaScreen extends StatefulWidget {
 class _LombaScreenState extends State<LombaScreen> {
   List<CompetitionAchievement> _achievements = [];
   String _selectedFilter = 'Semua';
+  bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -44,56 +53,39 @@ class _LombaScreenState extends State<LombaScreen> {
     _loadAchievements();
   }
 
-  void _loadAchievements() {
-    // Demo data - Nantinya data ini akan diberikan oleh admin
-    setState(() {
-      _achievements = [
-        CompetitionAchievement(
-          id: 'comp-001',
-          competitionName: 'Kejuaraan Nasional Panahan 2025',
-          category: 'Recurve - Senior Putra',
-          date: DateTime(2025, 12, 15),
-          location: 'Jakarta',
-          medal: MedalType.gold,
-          ranking: 1,
-          totalParticipants: 48,
-          notes: 'Skor: 680/720',
-        ),
-        CompetitionAchievement(
-          id: 'comp-002',
-          competitionName: 'Piala Gubernur 2025',
-          category: 'Recurve - Senior Putra',
-          date: DateTime(2025, 11, 20),
-          location: 'Bandung',
-          medal: MedalType.silver,
-          ranking: 2,
-          totalParticipants: 36,
-          notes: 'Skor: 665/720',
-        ),
-        CompetitionAchievement(
-          id: 'comp-003',
-          competitionName: 'Kejuaraan Daerah 2025',
-          category: 'Recurve - Senior Putra',
-          date: DateTime(2025, 10, 10),
-          location: 'Surabaya',
-          medal: MedalType.bronze,
-          ranking: 3,
-          totalParticipants: 42,
-          notes: 'Skor: 650/720',
-        ),
-        CompetitionAchievement(
-          id: 'comp-004',
-          competitionName: 'Open Tournament 2025',
-          category: 'Recurve - Senior Putra',
-          date: DateTime(2025, 9, 5),
-          location: 'Yogyakarta',
-          medal: MedalType.participant,
-          ranking: 8,
-          totalParticipants: 30,
-          notes: 'Skor: 620/720',
-        ),
-      ];
-    });
+  Future<void> _loadAchievements() async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('v_latest_competition_news')
+          .select()
+          .order('published_at', ascending: false)
+          .order('competition_date', ascending: false);
+      final rows = List<Map<String, dynamic>>.from(response);
+      final items = rows
+          .map((row) => DbLatestCompetitionNewsView.fromJson(row))
+          .where((news) => news.publishedAt != null)
+          .map(_mapCompetitionNews)
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        _achievements = items;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Gagal memuat data lomba.';
+      });
+    }
   }
 
   List<CompetitionAchievement> get filteredAchievements {
@@ -217,43 +209,64 @@ class _LombaScreenState extends State<LombaScreen> {
           ),
           // Achievements List
           Expanded(
-            child: filteredAchievements.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.emoji_events_outlined,
-                          size: 80,
-                          color: Colors.grey[300],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Belum ada prestasi',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Prestasi akan ditambahkan oleh admin',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[400],
-                          ),
-                        ),
-                      ],
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Color(0xFF10B982)),
                     ),
                   )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: filteredAchievements.length,
-                    itemBuilder: (context, index) {
-                      final achievement = filteredAchievements[index];
-                      return _buildAchievementCard(achievement);
-                    },
-                  ),
+                : _errorMessage != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Text(
+                            _errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ),
+                      )
+                    : filteredAchievements.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.emoji_events_outlined,
+                                  size: 80,
+                                  color: Colors.grey[300],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Belum ada prestasi',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Prestasi akan ditambahkan oleh admin',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[400],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: filteredAchievements.length,
+                            itemBuilder: (context, index) {
+                              final achievement = filteredAchievements[index];
+                              return _buildAchievementCard(achievement);
+                            },
+                          ),
           ),
         ],
       ),
@@ -350,130 +363,163 @@ class _LombaScreenState extends State<LombaScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
           onTap: () => _showAchievementDetail(achievement),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: medalColor.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        medalEmoji,
-                        style: const TextStyle(fontSize: 32),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            achievement.competitionName,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            achievement.category,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: Color(0xFF6B7280),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (achievement.imageUrl != null &&
+                  achievement.imageUrl!.isNotEmpty)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: _buildPosterImage(achievement.imageUrl!),
+                  ),
                 ),
-                const SizedBox(height: 16),
-                const Divider(height: 1),
-                const SizedBox(height: 16),
-                Row(
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(
-                      Icons.calendar_today,
-                      size: 16,
-                      color: Colors.grey[600],
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      DateFormat('dd MMMM yyyy').format(achievement.date),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF6B7280),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.location_on, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 8),
-                    Text(
-                      achievement.location,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF6B7280),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.emoji_events, size: 16, color: Colors.grey[600]),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Peringkat ${achievement.ranking} dari ${achievement.totalParticipants} peserta',
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF10B982),
-                      ),
-                    ),
-                  ],
-                ),
-                if (achievement.notes.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF0FDF4),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
+                    Row(
                       children: [
-                        const Icon(
-                          Icons.info_outline,
-                          size: 16,
-                          color: Color(0xFF10B982),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: medalColor.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Text(
-                            achievement.notes,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF065F46),
-                            ),
+                            medalEmoji,
+                            style: const TextStyle(fontSize: 32),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                achievement.competitionName,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _buildCardSubtitle(achievement),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF6B7280),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ],
-            ),
+                    const SizedBox(height: 16),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          DateFormat('dd MMMM yyyy', 'id_ID')
+                              .format(achievement.date),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.location_on,
+                            size: 16, color: Colors.grey[600]),
+                        const SizedBox(width: 8),
+                        Text(
+                          achievement.location,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Color(0xFF6B7280),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.emoji_events,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 8),
+                        if (achievement.ranking > 0 &&
+                            achievement.totalParticipants > 0)
+                          Text(
+                            'Peringkat ${achievement.ranking} dari ${achievement.totalParticipants} peserta',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF10B982),
+                            ),
+                          )
+                        else
+                          const Text(
+                            'Hasil lomba belum tersedia',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF10B982),
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (achievement.notes.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline,
+                              size: 16,
+                              color: Color(0xFF10B982),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                achievement.notes,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF065F46),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -559,16 +605,40 @@ class _LombaScreenState extends State<LombaScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _buildDetailRow('Kategori', achievement.category),
+                if (achievement.imageUrl != null &&
+                    achievement.imageUrl!.isNotEmpty) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: _buildPosterImage(achievement.imageUrl!),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                _buildDetailRow(
+                  'Kategori',
+                  achievement.category.isNotEmpty
+                      ? achievement.category
+                      : '-',
+                ),
+                _buildDetailRow(
+                  'Pemenang',
+                  achievement.winners.isNotEmpty
+                      ? _formatWinnerNames(achievement.winners)
+                      : '-',
+                ),
                 _buildDetailRow(
                   'Tanggal',
-                  DateFormat('dd MMMM yyyy').format(achievement.date),
+                  DateFormat('dd MMMM yyyy', 'id_ID')
+                      .format(achievement.date),
                 ),
                 _buildDetailRow('Lokasi', achievement.location),
-                _buildDetailRow(
-                  'Peringkat',
-                  '${achievement.ranking} dari ${achievement.totalParticipants} peserta',
-                ),
+                if (achievement.ranking > 0 && achievement.totalParticipants > 0)
+                  _buildDetailRow(
+                    'Peringkat',
+                    '${achievement.ranking} dari ${achievement.totalParticipants} peserta',
+                  ),
                 if (achievement.notes.isNotEmpty)
                   _buildDetailRow('Catatan', achievement.notes),
                 const SizedBox(height: 24),
@@ -625,6 +695,164 @@ class _LombaScreenState extends State<LombaScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  CompetitionAchievement _mapCompetitionNews(
+    DbLatestCompetitionNewsView news,
+  ) {
+    final competitionName = (news.competitionName ?? news.title).trim();
+    final date = news.competitionDate ??
+        news.publishedAt ??
+        DateTime.now();
+    final location = (news.location ?? '').trim().isEmpty
+        ? 'Lokasi belum ditentukan'
+        : news.location!.trim();
+    final ranking = _extractRanking(news.content);
+    final totalParticipants = _extractTotalParticipants(news.content);
+    final medal = _inferMedal(
+      news.title,
+      news.content,
+      ranking: ranking,
+    );
+    final winners = _cleanWinnerNames(news.winnerNames);
+
+    return CompetitionAchievement(
+      id: news.id,
+      competitionName: competitionName,
+      category: _extractCategory(news.content),
+      winners: winners,
+      imageUrl: _cleanImageUrl(news.imageUrl),
+      date: date,
+      location: location,
+      medal: medal,
+      ranking: ranking ?? 0,
+      totalParticipants: totalParticipants ?? 0,
+      notes: news.content.trim(),
+    );
+  }
+
+  String _buildCardSubtitle(CompetitionAchievement achievement) {
+    if (achievement.category.isNotEmpty) {
+      return 'Kategori: ${achievement.category}';
+    }
+    if (achievement.winners.isNotEmpty) {
+      return 'Pemenang: ${_formatWinnerNames(achievement.winners)}';
+    }
+    return 'Informasi lomba';
+  }
+
+  String? _cleanImageUrl(String? value) {
+    if (value == null) {
+      return null;
+    }
+    final trimmed = value.trim();
+    if (trimmed.isEmpty || trimmed.toLowerCase() == 'null') {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String _formatWinnerNames(List<String> winners) {
+    if (winners.length > 3) {
+      final shown = winners.take(3).join(', ');
+      final remaining = winners.length - 3;
+      return '$shown +$remaining';
+    }
+    return winners.join(', ');
+  }
+
+  List<String> _cleanWinnerNames(List<String> winners) {
+    return winners
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty && name.toLowerCase() != 'null')
+        .toList();
+  }
+
+  String _extractCategory(String content) {
+    final match = RegExp(
+      r'(?:kategori|category)\s*[:\-]?\s*([^\n\.,]+)',
+      caseSensitive: false,
+    ).firstMatch(content);
+    if (match == null) {
+      return '';
+    }
+    return match.group(1)?.trim() ?? '';
+  }
+
+  MedalType _inferMedal(
+    String title,
+    String content, {
+    int? ranking,
+  }) {
+    final text = '${title.toLowerCase()} ${content.toLowerCase()}';
+    if (text.contains('emas') || text.contains('gold') || ranking == 1) {
+      return MedalType.gold;
+    }
+    if (text.contains('perak') || text.contains('silver') || ranking == 2) {
+      return MedalType.silver;
+    }
+    if (text.contains('perunggu') || text.contains('bronze') || ranking == 3) {
+      return MedalType.bronze;
+    }
+    return MedalType.participant;
+  }
+
+  int? _extractRanking(String content) {
+    final match = RegExp(
+      r'(?:juara|peringkat|rank)\s*(\d+)',
+      caseSensitive: false,
+    ).firstMatch(content);
+    if (match == null) {
+      return null;
+    }
+    return int.tryParse(match.group(1) ?? '');
+  }
+
+  int? _extractTotalParticipants(String content) {
+    final match = RegExp(
+      r'dari\s*(\d+)\s*peserta',
+      caseSensitive: false,
+    ).firstMatch(content);
+    if (match == null) {
+      return null;
+    }
+    return int.tryParse(match.group(1) ?? '');
+  }
+
+  Widget _buildPosterImage(String imageUrl) {
+    return Image.network(
+      imageUrl,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return Container(
+          color: const Color(0xFFE5E7EB),
+          alignment: Alignment.center,
+          child: const Icon(
+            Icons.image_not_supported_outlined,
+            color: Color(0xFF9CA3AF),
+            size: 32,
+          ),
+        );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          return child;
+        }
+        return Container(
+          color: const Color(0xFFF3F4F6),
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor:
+                  AlwaysStoppedAnimation<Color>(Color(0xFF10B982)),
+            ),
+          ),
+        );
+      },
     );
   }
 }

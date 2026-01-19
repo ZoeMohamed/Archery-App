@@ -1,5 +1,6 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'upload_kta_screen.dart';
 import 'kta_card_screen.dart';
 import 'login_screen.dart';
@@ -30,6 +31,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _obscurePasswordBaru = true;
   bool _isMember = false;
   bool _isLoading = true;
+  bool _isRoleUpdating = false;
+  List<String> _availableRoles = [];
+  String _activeRole = 'non_member';
 
   @override
   void initState() {
@@ -43,6 +47,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final userData = UserData();
       await userData.loadData();
+      var availableRoles = <String>[];
+      var activeRole = userData.role;
 
       print('Profile: Loading user data...');
       print('Profile: userId = ${userData.userId}');
@@ -50,24 +56,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
       print('Profile: isMember = ${userData.isMember}');
       print('Profile: isDemoMode = ${userData.isDemoMode}');
 
-      // Only fetch from Supabase if NOT in demo mode and user is logged in
-      if (!userData.isDemoMode && userData.userId.isNotEmpty) {
+      final authUser = Supabase.instance.client.auth.currentUser;
+      final supabaseUserId =
+          userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+
+      // Always fetch from Supabase when user id is available
+      if (supabaseUserId.isNotEmpty) {
         try {
           final response = await Supabase.instance.client
               .from('users')
               .select('*')
-              .eq('id', userData.userId)
+              .eq('id', supabaseUserId)
               .maybeSingle();
 
           if (response != null) {
+            final roles = _parseRoles(response['roles']);
+            activeRole =
+                response['active_role']?.toString() ??
+                (roles.isNotEmpty ? roles.first : 'non_member');
+            final normalizedRoles = [
+              ...roles,
+              if (activeRole.isNotEmpty && !roles.contains(activeRole))
+                activeRole,
+            ];
+            availableRoles = normalizedRoles;
+
             // Update UserData with fresh data from Supabase
+            userData.userId = response['id']?.toString() ?? supabaseUserId;
             userData.namaLengkap = response['full_name'] ?? '';
             userData.email = response['email'] ?? '';
             userData.nomorTelepon = response['phone_number'] ?? '';
-            userData.role = response['role'] ?? 'non_member';
-            userData.isCoach = response['is_coach'] ?? false;
+            userData.role = activeRole;
+            userData.isCoach = roles.contains('coach');
             userData.memberNumber = response['member_number'] ?? '';
             userData.memberStatus = response['member_status'] ?? '';
+            userData.isDemoMode = false;
 
             // Parse birth date if available
             if (response['birth_date'] != null) {
@@ -94,8 +117,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             }
 
             // Determine membership status
-            userData.isMember =
-                userData.role == 'member' || userData.role == 'admin';
+            userData.isMember = _hasMemberRole(roles, activeRole);
 
             // Save updated data locally
             await userData.saveData();
@@ -127,6 +149,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         setState(() {
           _isMember = userData.isMember;
+          _availableRoles = availableRoles;
+          _activeRole = activeRole;
           _isLoading = false;
         });
         
@@ -174,6 +198,140 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SnackBar(
           content: Text('Profil berhasil disimpan!'),
           backgroundColor: Color(0xFF10B982),
+        ),
+      );
+    }
+  }
+
+  List<String> _parseRoles(dynamic value) {
+    if (value is List) {
+      return value
+          .map((item) => _normalizeRole(item.toString()))
+          .where((role) => role.isNotEmpty)
+          .toList();
+    }
+    if (value is String) {
+      final trimmed = value.trim();
+      if (trimmed.isEmpty) {
+        return [];
+      }
+      if (trimmed.startsWith('[')) {
+        try {
+          final decoded = jsonDecode(trimmed);
+          if (decoded is List) {
+            return decoded
+                .map((item) => _normalizeRole(item.toString()))
+                .where((role) => role.isNotEmpty)
+                .toList();
+          }
+        } catch (_) {}
+      }
+      if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+        final inner = trimmed.substring(1, trimmed.length - 1);
+        if (inner.trim().isEmpty) {
+          return [];
+        }
+        return inner
+            .split(',')
+            .map((item) => _normalizeRole(item))
+            .where((role) => role.isNotEmpty)
+            .toList();
+      }
+      final normalized = _normalizeRole(trimmed);
+      return normalized.isEmpty ? [] : [normalized];
+    }
+    return [];
+  }
+
+  String _normalizeRole(String value) {
+    var trimmed = value.trim();
+    if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 1) {
+      trimmed = trimmed.substring(1, trimmed.length - 1);
+    }
+    return trimmed.trim();
+  }
+
+  bool _hasMemberRole(List<String> roles, String activeRole) {
+    const memberRoles = {'member', 'admin', 'staff', 'coach'};
+    if (memberRoles.contains(activeRole)) {
+      return true;
+    }
+    return roles.any(memberRoles.contains);
+  }
+
+  List<String> _roleOptions() {
+    const order = ['admin', 'staff', 'member', 'coach'];
+    final available = {..._availableRoles, _activeRole};
+    return order.where(available.contains).toList();
+  }
+
+  String _roleLabel(String role) {
+    switch (role) {
+      case 'admin':
+        return 'Admin';
+      case 'staff':
+        return 'Pengurus';
+      case 'member':
+        return 'Member';
+      case 'coach':
+        return 'Pelatih';
+      default:
+        return role;
+    }
+  }
+
+  Future<void> _setActiveRole(String role) async {
+    if (_isRoleUpdating || role == _activeRole) {
+      return;
+    }
+    final userData = UserData();
+    if (userData.userId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Akun belum terhubung ke Supabase.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isRoleUpdating = true;
+    });
+
+    try {
+      await Supabase.instance.client
+          .from('users')
+          .update({'active_role': role})
+          .eq('id', userData.userId);
+
+      userData.role = role;
+      userData.isCoach = _availableRoles.contains('coach');
+      userData.isMember = _hasMemberRole(_availableRoles, role);
+      await userData.saveData();
+
+      if (!mounted) return;
+      setState(() {
+        _activeRole = role;
+        _isMember = userData.isMember;
+        _isRoleUpdating = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Role diubah ke ${_roleLabel(role)}'),
+          backgroundColor: const Color(0xFF10B982),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isRoleUpdating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengubah role: $e'),
+          backgroundColor: Colors.red,
         ),
       );
     }
@@ -265,10 +423,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         appBar: AppBar(
           backgroundColor: Colors.white,
           elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.black),
-            onPressed: () => Navigator.pop(context),
-          ),
+          automaticallyImplyLeading: false,
           title: const Text(
             'Profil',
             style: TextStyle(
@@ -291,10 +446,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
         title: const Text(
           'Profil',
           style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
@@ -453,6 +605,121 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
             const SizedBox(height: 16),
+            if (_roleOptions().isNotEmpty)
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B982).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.manage_accounts,
+                            color: Color(0xFF10B982),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Role Akses',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                        ),
+                        if (_isRoleUpdating)
+                          const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFF10B982),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Role aktif: ${_roleLabel(_activeRole)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Column(
+                      children: _roleOptions().map((role) {
+                        final selected = _activeRole == role;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? const Color(0xFF10B982).withOpacity(0.08)
+                                : const Color(0xFFF9FAFB),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selected
+                                  ? const Color(0xFF10B982)
+                                  : const Color(0xFFE5E7EB),
+                            ),
+                          ),
+                          child: RadioListTile<String>(
+                            value: role,
+                            groupValue: _activeRole,
+                            onChanged: _isRoleUpdating
+                                ? null
+                                : (value) {
+                                    if (value != null) {
+                                      _setActiveRole(value);
+                                    }
+                                  },
+                            activeColor: const Color(0xFF10B982),
+                            title: Text(
+                              _roleLabel(role),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            subtitle: Text(
+                              selected ? 'Sedang aktif' : 'Nonaktif',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF6B7280),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            if (_roleOptions().isNotEmpty) const SizedBox(height: 16),
             // Change Password Section
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 24),
@@ -628,120 +895,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Demo: Member Toggle Switch
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFEF3C7),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFF59E0B), width: 1),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF59E0B),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(
-                          Icons.science,
-                          color: Colors.white,
-                          size: 16,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      const Text(
-                        'Mode Demo',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF92400E),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _isMember ? 'Status: Member' : 'Status: Non-Member',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF92400E),
-                          ),
-                        ),
-                      ),
-                      Switch(
-                        value: _isMember,
-                        onChanged: (value) async {
-                          setState(() {
-                            _isMember = value;
-                          });
-                          print('Profile: Toggle changed to $value');
-                          final userData = UserData();
-                          userData.isMember = value;
-                          // IMPORTANT: Update role to match isMember status
-                          userData.role = value ? 'member' : 'non_member';
-                          print('Profile: Set role to ${userData.role}');
-                          if (value) {
-                            // Auto-generate membership when toggled to member
-                            userData.ktaStatus = 'approved';
-                            final now = DateTime.now();
-                            final random = now.millisecondsSinceEpoch % 10000;
-                            userData.membershipNumber =
-                                'AIA-${now.year}-${random.toString().padLeft(4, '0')}';
-                            userData.membershipValidFrom =
-                                '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
-                            final validUntil = DateTime(
-                              now.year + 2,
-                              now.month,
-                              now.day,
-                            );
-                            userData.membershipValidUntil =
-                                '${validUntil.day.toString().padLeft(2, '0')}/${validUntil.month.toString().padLeft(2, '0')}/${validUntil.year}';
-                          } else {
-                            userData.ktaStatus = 'none';
-                            userData.membershipNumber = '';
-                            userData.membershipValidFrom = '';
-                            userData.membershipValidUntil = '';
-                          }
-                          await userData.saveData();
-                          print(
-                            'Profile: Data saved. role=${userData.role}, isMember=${userData.isMember}',
-                          );
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  _isMember
-                                      ? 'Mode Member diaktifkan'
-                                      : 'Mode Non-Member diaktifkan',
-                                ),
-                                backgroundColor: const Color(0xFF10B982),
-                                duration: const Duration(seconds: 1),
-                              ),
-                            );
-                          }
-                        },
-                        activeColor: const Color(0xFF10B982),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Toggle untuk beralih antara mode Member dan Non-Member',
-                    style: TextStyle(fontSize: 11, color: Color(0xFFA16207)),
-                  ),
                 ],
               ),
             ),

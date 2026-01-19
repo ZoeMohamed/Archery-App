@@ -1,6 +1,11 @@
-import 'package:flutter/material.dart';
-import '../utils/user_data.dart';
 import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../models/supabase/db_payment.dart';
+import '../services/supabase_payment_service.dart';
+import '../utils/user_data.dart';
 
 class KtaCardScreen extends StatefulWidget {
   const KtaCardScreen({super.key});
@@ -11,6 +16,9 @@ class KtaCardScreen extends StatefulWidget {
 
 class _KtaCardScreenState extends State<KtaCardScreen> {
   bool _isLoading = true;
+  String _ktaNumber = '';
+  String _validFrom = '';
+  String _validUntil = '';
 
   @override
   void initState() {
@@ -19,10 +27,162 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
   }
 
   Future<void> _loadUserData() async {
-    await UserData().loadData();
+    final userData = UserData();
+    await userData.loadData();
+
+    _ktaNumber = _resolveMemberNumber(userData);
+    _validFrom = userData.membershipValidFrom;
+    _validUntil = userData.membershipValidUntil;
+
+    await _refreshKtaFromSupabase(userData);
+
     setState(() {
       _isLoading = false;
     });
+  }
+
+  Future<void> _refreshKtaFromSupabase(UserData userData) async {
+    final authUser = Supabase.instance.client.auth.currentUser;
+    final userId = userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+    if (userId.isEmpty) {
+      return;
+    }
+
+    try {
+      final userResponse = await Supabase.instance.client
+          .from('users')
+          .select('member_number, kta_valid_from, kta_valid_until, kta_issued_date')
+          .eq('id', userId)
+          .maybeSingle();
+
+      if (userResponse != null) {
+        final memberNumber = userResponse['member_number']?.toString() ?? '';
+        if (memberNumber.isNotEmpty) {
+          _ktaNumber = memberNumber;
+          userData.memberNumber = memberNumber;
+          userData.membershipNumber = memberNumber;
+        }
+
+        final validFromRaw = userResponse['kta_valid_from']?.toString() ?? '';
+        final validUntilRaw = userResponse['kta_valid_until']?.toString() ?? '';
+        final issuedRaw = userResponse['kta_issued_date']?.toString() ?? '';
+        final validFrom = _parseSupabaseDate(validFromRaw) ??
+            _parseSupabaseDate(issuedRaw);
+        final validUntil = _parseSupabaseDate(validUntilRaw);
+        if (_applyValidityDates(validFrom, validUntil)) {
+          // Supabase validity data applied.
+        }
+      }
+
+      final paymentService = SupabasePaymentService();
+      final payments = await paymentService.fetchMonthlyPaymentsForUser(userId);
+      final latestPaid = _latestEligiblePayment(payments);
+      if (latestPaid != null) {
+        final paidDate = _normalizeDate(
+          latestPaid.verifiedAt ??
+              latestPaid.createdAt ??
+              latestPaid.paymentMonth,
+        );
+        if (paidDate != null) {
+          final validUntil = _addMonth(paidDate);
+          _validFrom = _formatDate(paidDate);
+          _validUntil = _formatDate(validUntil);
+        }
+      }
+
+      userData.membershipValidFrom = _validFrom;
+      userData.membershipValidUntil = _validUntil;
+      await userData.saveData();
+
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('KTA: failed to fetch Supabase data: $e');
+    }
+  }
+
+  String _resolveMemberNumber(UserData userData) {
+    if (userData.memberNumber.isNotEmpty) {
+      return userData.memberNumber;
+    }
+    if (userData.membershipNumber.isNotEmpty) {
+      return userData.membershipNumber;
+    }
+    return '';
+  }
+
+  DbPayment? _latestEligiblePayment(List<DbPayment> payments) {
+    final eligible = payments.where((payment) {
+      final status = payment.status.toLowerCase().trim();
+      if (status.isEmpty) {
+        return true;
+      }
+      return status != 'rejected' &&
+          status != 'failed' &&
+          status != 'canceled' &&
+          status != 'cancelled';
+    }).toList();
+
+    if (eligible.isEmpty) {
+      return null;
+    }
+
+    eligible.sort((a, b) {
+      final aDate = _paymentDateForSort(a);
+      final bDate = _paymentDateForSort(b);
+      return bDate.compareTo(aDate);
+    });
+
+    return eligible.first;
+  }
+
+  DateTime _paymentDateForSort(DbPayment payment) {
+    return payment.verifiedAt ??
+        payment.createdAt ??
+        payment.paymentMonth ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
+  DateTime? _normalizeDate(DateTime? value) {
+    if (value == null) {
+      return null;
+    }
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  DateTime _addMonth(DateTime value) {
+    final nextMonth = DateTime(value.year, value.month + 1, 1);
+    final lastDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
+    final day = value.day > lastDay ? lastDay : value.day;
+    return DateTime(nextMonth.year, nextMonth.month, day);
+  }
+
+  DateTime? _parseSupabaseDate(String raw) {
+    if (raw.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(raw);
+  }
+
+  bool _applyValidityDates(DateTime? validFrom, DateTime? validUntil) {
+    if (validFrom != null && validUntil != null) {
+      _validFrom = _formatDate(validFrom);
+      _validUntil = _formatDate(validUntil);
+      return true;
+    }
+    if (validFrom != null) {
+      _validFrom = _formatDate(validFrom);
+      _validUntil = _formatDate(_addMonth(validFrom));
+      return true;
+    }
+    return false;
+  }
+
+  String _formatDate(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    return '$day/$month/${value.year}';
   }
 
   @override
@@ -161,7 +321,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                userData.membershipNumber,
+                                _ktaNumber.isNotEmpty ? _ktaNumber : '-',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 24,
@@ -204,7 +364,9 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          userData.membershipValidFrom,
+                                          _validFrom.isNotEmpty
+                                              ? _validFrom
+                                              : '-',
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 14,
@@ -227,7 +389,9 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          userData.membershipValidUntil,
+                                          _validUntil.isNotEmpty
+                                              ? _validUntil
+                                              : '-',
                                           style: const TextStyle(
                                             color: Colors.white,
                                             fontSize: 14,

@@ -62,7 +62,8 @@ class UserData {
     
     // Ensure isMember is in sync with role
     if (!isDemoMode) {
-      isMember = role == 'member' || role == 'admin';
+      const memberRoles = {'member', 'admin', 'staff', 'coach'};
+      isMember = memberRoles.contains(role);
     }
   }
 

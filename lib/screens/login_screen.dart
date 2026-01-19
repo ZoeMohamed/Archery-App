@@ -74,7 +74,9 @@ class _LoginScreenState extends State<LoginScreen> {
             userData.email = profile.email;
             userData.namaLengkap = profile.fullName;
             userData.nomorTelepon = profile.phoneNumber ?? '';
-            userData.role = profile.role;
+            userData.role = profile.activeRole.isNotEmpty
+                ? profile.activeRole
+                : profile.role;
             userData.isCoach = profile.isCoach;
             userData.isMember = profile.isMember;
             userData.memberNumber = profile.memberNumber ?? '';
