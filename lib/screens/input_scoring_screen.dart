@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'main_navigation.dart';
+import 'training_result_screen.dart';
 import '../utils/training_data.dart';
 
 class InputScoringScreen extends StatefulWidget {
@@ -14,6 +14,11 @@ class _InputScoringScreenState extends State<InputScoringScreen>
   late TrainingSession session;
   int selectedPlayerIndex = 0;
   late TabController _tabController;
+  int currentRoundIndex = 0;
+  int currentArrowIndex = 0;
+  double keypadTopPosition =
+      0.0; // Position offset for draggable keypad
+  bool isKeypadVisible = true; // Toggle keypad visibility
 
   @override
   void initState() {
@@ -27,9 +32,43 @@ class _InputScoringScreenState extends State<InputScoringScreen>
       if (!_tabController.indexIsChanging) {
         setState(() {
           selectedPlayerIndex = _tabController.index;
+          _initializeScoresForPlayer();
+          _findCurrentPosition();
         });
       }
     });
+    _initializeScoresForPlayer();
+    _findCurrentPosition();
+  }
+
+  void _initializeScoresForPlayer() {
+    String playerName = session.playerNames[selectedPlayerIndex];
+    if (session.scores[playerName] == null) {
+      session.scores[playerName] = [];
+    }
+    // Initialize all rounds with empty scores
+    while (session.scores[playerName]!.length < session.numberOfRounds) {
+      session.scores[playerName]!.add(
+        List.generate(session.arrowsPerRound, (_) => ''),
+      );
+    }
+  }
+
+  void _findCurrentPosition() {
+    String playerName = session.playerNames[selectedPlayerIndex];
+    // Find first empty score position
+    for (int r = 0; r < session.numberOfRounds; r++) {
+      for (int a = 0; a < session.arrowsPerRound; a++) {
+        if (session.scores[playerName]![r][a].isEmpty) {
+          currentRoundIndex = r;
+          currentArrowIndex = a;
+          return;
+        }
+      }
+    }
+    // All filled, stay at last position
+    currentRoundIndex = session.numberOfRounds - 1;
+    currentArrowIndex = session.arrowsPerRound - 1;
   }
 
   @override
@@ -43,15 +82,23 @@ class _InputScoringScreenState extends State<InputScoringScreen>
     if (session.scores[playerName] != null) {
       for (var round in session.scores[playerName]!) {
         for (var score in round) {
-          total += session.convertScoreToInt(score);
+          if (score.isNotEmpty) {
+            total += session.convertScoreToInt(score);
+          }
         }
       }
     }
     return total;
   }
 
-  int _getCompletedRounds(String playerName) {
-    return session.scores[playerName]?.length ?? 0;
+  bool _isRoundComplete(String playerName, int roundIndex) {
+    if (session.scores[playerName] == null ||
+        roundIndex >= session.scores[playerName]!.length) {
+      return false;
+    }
+    return session.scores[playerName]![roundIndex].every(
+      (score) => score.isNotEmpty,
+    );
   }
 
   void _deleteRound(String playerName, int roundIndex) {
@@ -70,7 +117,11 @@ class _InputScoringScreenState extends State<InputScoringScreen>
           TextButton(
             onPressed: () {
               setState(() {
-                session.scores[playerName]?.removeAt(roundIndex);
+                // Reset all scores in this round to empty
+                session.scores[playerName]![roundIndex] = List.generate(
+                  session.arrowsPerRound,
+                  (_) => '',
+                );
               });
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
@@ -88,19 +139,77 @@ class _InputScoringScreenState extends State<InputScoringScreen>
     );
   }
 
-  void _inputScoresForRound(String playerName, int roundIndex) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => RoundScoringScreen(
-          session: session,
-          playerName: playerName,
-          roundIndex: roundIndex,
-        ),
-      ),
-    ).then((_) {
-      setState(() {});
+  void _inputScore(
+    String playerName,
+    int roundIndex,
+    int arrowIndex,
+    String score,
+  ) {
+    setState(() {
+      session.scores[playerName]![roundIndex][arrowIndex] = score;
+
+      // Auto-advance to next arrow
+      currentArrowIndex++;
+      if (currentArrowIndex >= session.arrowsPerRound) {
+        // Move to next round
+        currentArrowIndex = 0;
+        currentRoundIndex++;
+        if (currentRoundIndex >= session.numberOfRounds) {
+          // All rounds complete
+          currentRoundIndex = session.numberOfRounds - 1;
+          currentArrowIndex = session.arrowsPerRound - 1;
+        }
+      }
+
       _checkIfAllComplete();
+    });
+  }
+
+  void _inputScoreQuick(String score) {
+    String playerName = session.playerNames[selectedPlayerIndex];
+
+    // Check if current position is valid
+    if (currentRoundIndex >= session.numberOfRounds) return;
+    if (currentArrowIndex >= session.arrowsPerRound) return;
+
+    // Check if position already filled
+    if (session
+        .scores[playerName]![currentRoundIndex][currentArrowIndex]
+        .isNotEmpty) {
+      return;
+    }
+
+    _inputScore(playerName, currentRoundIndex, currentArrowIndex, score);
+  }
+
+  void _deleteLastScore() {
+    String playerName = session.playerNames[selectedPlayerIndex];
+
+    setState(() {
+      // Move back one position
+      if (currentArrowIndex > 0) {
+        currentArrowIndex--;
+      } else if (currentRoundIndex > 0) {
+        currentRoundIndex--;
+        currentArrowIndex = session.arrowsPerRound - 1;
+      } else {
+        return; // Already at first position
+      }
+
+      // Clear the score
+      session.scores[playerName]![currentRoundIndex][currentArrowIndex] = '';
+    });
+  }
+
+  void _nextEnd() {
+    setState(() {
+      // Move to next round, first arrow
+      currentRoundIndex++;
+      currentArrowIndex = 0;
+      if (currentRoundIndex >= session.numberOfRounds) {
+        currentRoundIndex = session.numberOfRounds - 1;
+        currentArrowIndex = session.arrowsPerRound - 1;
+      }
     });
   }
 
@@ -113,14 +222,54 @@ class _InputScoringScreenState extends State<InputScoringScreen>
   void _finishTraining() async {
     await TrainingData().saveCurrentSession();
     if (mounted) {
-      // Navigate to MainNavigation with ArcherScoringScreen selected (index 3)
-      Navigator.of(context).pushAndRemoveUntil(
+      // Navigate to Result Screen
+      Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (context) => const MainNavigation(initialIndex: 3),
+          builder: (context) => TrainingResultScreen(session: session),
         ),
-        (route) => false,
       );
     }
+  }
+
+  int _getGolds(String playerName) {
+    int golds = 0;
+    if (session.scores[playerName] != null) {
+      for (var round in session.scores[playerName]!) {
+        for (var score in round) {
+          if (score == 'X' || score == '10') {
+            golds++;
+          }
+        }
+      }
+    }
+    return golds;
+  }
+
+  int _getRoundTotal(String playerName, int roundIndex) {
+    int total = 0;
+    if (session.scores[playerName] != null &&
+        roundIndex < session.scores[playerName]!.length) {
+      for (var score in session.scores[playerName]![roundIndex]) {
+        if (score.isNotEmpty) {
+          total += session.convertScoreToInt(score);
+        }
+      }
+    }
+    return total;
+  }
+
+  double _getAverageScore(String playerName) {
+    int total = _getTotalScore(playerName);
+    int arrowCount = 0;
+    if (session.scores[playerName] != null) {
+      for (var round in session.scores[playerName]!) {
+        for (var score in round) {
+          if (score.isNotEmpty) arrowCount++;
+        }
+      }
+    }
+    if (arrowCount == 0) return 0;
+    return total / arrowCount;
   }
 
   @override
@@ -128,7 +277,7 @@ class _InputScoringScreenState extends State<InputScoringScreen>
     String currentPlayerName = session.playerNames[selectedPlayerIndex];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFE8F5E9),
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         backgroundColor: const Color(0xFF10B982),
         elevation: 0,
@@ -163,9 +312,13 @@ class _InputScoringScreenState extends State<InputScoringScreen>
             );
           },
         ),
-        title: const Text(
-          'Input Scoring',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        title: Text(
+          currentPlayerName,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
         ),
         centerTitle: true,
         bottom: session.numberOfPlayers > 1
@@ -204,205 +357,237 @@ class _InputScoringScreenState extends State<InputScoringScreen>
       ),
       body: Column(
         children: [
-          // Player Stats Header
+          // Header Stats - Distance, Golds, Average, Total
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: const Color(0xFFFFF9F0),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
+                  blurRadius: 5,
                   offset: const Offset(0, 2),
                 ),
               ],
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildStatItem(
-                  'Rambahan',
-                  '${_getCompletedRounds(currentPlayerName)}/${session.numberOfRounds}',
-                  Icons.repeat,
+                Text(
+                  'Target: ${session.targetType}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
                 ),
-                Container(width: 2, height: 40, color: Colors.grey[300]),
-                _buildStatItem(
-                  'Total Skor',
-                  '${_getTotalScore(currentPlayerName)}',
-                  Icons.star,
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB020),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        'Golds: ${_getGolds(currentPlayerName)}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B982),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'Avg: ${_getAverageScore(currentPlayerName).toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            'Total: ${_getTotalScore(currentPlayerName)}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          // Rounds List
+          // Detail button for multiple players (above rounds)
+          if (session.numberOfPlayers > 1)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          AverageTableScreen(session: session),
+                    ),
+                  );
+                },
+                icon: const Icon(
+                  Icons.table_chart,
+                  size: 18,
+                  color: Color(0xFF10B982),
+                ),
+                label: const Text(
+                  'Detail',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF10B982),
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Color(0xFF10B982), width: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          // Rounds Table with scores
           Expanded(
             child: ListView.builder(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               itemCount: session.numberOfRounds,
               itemBuilder: (context, roundIndex) {
-                bool isCompleted =
-                    _getCompletedRounds(currentPlayerName) > roundIndex;
-                List<String> roundScores = isCompleted
-                    ? session.scores[currentPlayerName]![roundIndex]
-                    : [];
+                List<String> roundScores =
+                    session.scores[currentPlayerName]![roundIndex];
+                bool isComplete = _isRoundComplete(
+                  currentPlayerName,
+                  roundIndex,
+                );
+                int roundTotal = _getRoundTotal(currentPlayerName, roundIndex);
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: isCompleted
-                          ? const Color(0xFF10B982)
-                          : Colors.grey[300]!,
-                      width: 2,
-                    ),
+                    borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Round Header
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isCompleted
-                              ? const Color(0xFF10B982)
-                              : Colors.grey[100],
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Rambahan: ${roundIndex + 1}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF10B982),
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '${roundIndex + 1}',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: isCompleted
-                                      ? const Color(0xFF10B982)
-                                      : Colors.grey[600],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Rambahan ${roundIndex + 1}',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: isCompleted
-                                      ? Colors.white
-                                      : Colors.black87,
-                                ),
-                              ),
-                            ),
-                            if (isCompleted)
-                              const Icon(
-                                Icons.check_circle,
-                                color: Colors.white,
-                                size: 24,
-                              ),
-                          ],
-                        ),
-                      ),
-                      // Round Content
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            if (isCompleted) ...[
-                              // Show scores
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: roundScores.map((score) {
-                                  return _buildScoreBox(score);
-                                }).toList(),
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Total: ${roundScores.fold<int>(0, (sum, score) => sum + session.convertScoreToInt(score))}',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF10B982),
-                                    ),
+                          Row(
+                            children: [
+                              if (isComplete)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
                                   ),
-                                  IconButton(
-                                    onPressed: () => _deleteRound(
-                                      currentPlayerName,
-                                      roundIndex,
-                                    ),
-                                    icon: const Icon(Icons.delete_outline),
-                                    color: Colors.red,
-                                    tooltip: 'Hapus Rambahan',
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B982),
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                ],
-                              ),
-                            ] else ...[
-                              // Input button
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed:
-                                      _getCompletedRounds(currentPlayerName) ==
-                                          roundIndex
-                                      ? () => _inputScoresForRound(
-                                          currentPlayerName,
-                                          roundIndex,
-                                        )
-                                      : null,
-                                  icon: const Icon(Icons.edit, size: 20),
-                                  label: const Text('Input Skor'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF10B982),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 14,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    disabledBackgroundColor: Colors.grey[300],
-                                    disabledForegroundColor: Colors.grey[500],
-                                  ),
-                                ),
-                              ),
-                              if (_getCompletedRounds(currentPlayerName) <
-                                  roundIndex)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
                                   child: Text(
-                                    'Selesaikan rambahan sebelumnya',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
-                                      fontStyle: FontStyle.italic,
+                                    'Total: $roundTotal',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              if (isComplete) const SizedBox(width: 8),
+                              if (isComplete)
+                                GestureDetector(
+                                  onTap: () => _deleteRound(
+                                    currentPlayerName,
+                                    roundIndex,
+                                  ),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red[50],
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.delete_outline,
+                                      size: 18,
+                                      color: Colors.red,
                                     ),
                                   ),
                                 ),
                             ],
-                          ],
-                        ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: List.generate(session.arrowsPerRound, (
+                          arrowIndex,
+                        ) {
+                          String score = roundScores[arrowIndex];
+                          bool isCurrent =
+                              roundIndex == currentRoundIndex &&
+                              arrowIndex == currentArrowIndex;
+                          return GestureDetector(
+                            onTap: () {
+                              // Allow jumping to this position if it's empty or previous positions are filled
+                              setState(() {
+                                currentRoundIndex = roundIndex;
+                                currentArrowIndex = arrowIndex;
+                              });
+                            },
+                            child: _buildScoreBox(score, isCurrent: isCurrent),
+                          );
+                        }),
                       ),
                     ],
                   ),
@@ -410,35 +595,230 @@ class _InputScoringScreenState extends State<InputScoringScreen>
               },
             ),
           ),
+          // Keypad at bottom (draggable)
+          if (isKeypadVisible)
+            Transform.translate(
+              offset: Offset(0, keypadTopPosition),
+              child: GestureDetector(
+                onVerticalDragUpdate: (details) {
+                  setState(() {
+                    keypadTopPosition += details.delta.dy;
+                    // Limit dragging range to prevent going off-screen
+                    if (keypadTopPosition > 50) keypadTopPosition = 50;
+                    if (keypadTopPosition < -300) keypadTopPosition = -300;
+                  });
+                },
+                child: Container(
+                  //margin: const EdgeInsets.only(top: 0),
+                  padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, -2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Drag handle indicator
+                      Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[400],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      // Stats row
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'AVG: ${_getAverageScore(currentPlayerName).toStringAsFixed(2)}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF10B982),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Total: ${_getTotalScore(currentPlayerName)}',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF10B982),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6), //
+                      // Keypad grid
+                      GridView.count(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        crossAxisCount: 4,
+                        mainAxisSpacing: 3,
+                        crossAxisSpacing: 3,
+                        childAspectRatio: 2.0,
+                        children: [
+                          _buildKeypadButton(
+                            'X',
+                            const Color(0xFFFBBF24),
+                            Colors.black,
+                          ),
+                          _buildKeypadButton(
+                            '10',
+                            const Color(0xFFFBBF24),
+                            Colors.black,
+                          ),
+                          _buildKeypadButton(
+                            '9',
+                            const Color(0xFFFBBF24),
+                            Colors.black,
+                          ),
+                          _buildKeypadButton(
+                            '8',
+                            const Color(0xFFEF4444),
+                            Colors.white,
+                          ),
+                          _buildKeypadButton(
+                            '7',
+                            const Color(0xFFEF4444),
+                            Colors.white,
+                          ),
+                          _buildKeypadButton(
+                            '6',
+                            const Color(0xFF3B82F6),
+                            Colors.white,
+                          ),
+                          _buildKeypadButton(
+                            '5',
+                            const Color(0xFF3B82F6),
+                            Colors.white,
+                          ),
+                          _buildActionButton(
+                            icon: Icons.arrow_back,
+                            color: Colors.white,
+                            iconColor: Colors.orange,
+                            onTap: _deleteLastScore,
+                          ),
+                          _buildKeypadButton(
+                            '4',
+                            const Color(0xFF1F2937),
+                            Colors.white,
+                          ),
+                          _buildKeypadButton(
+                            '3',
+                            const Color(0xFF1F2937),
+                            Colors.white,
+                          ),
+                          _buildKeypadButton('2', Colors.white, Colors.black),
+                          _buildKeypadButton('1', Colors.white, Colors.black),
+                          _buildKeypadButton(
+                            'M',
+                            const Color(0xFF10B982),
+                            Colors.white,
+                          ),
+                          const SizedBox(), // Empty space
+                          const SizedBox(), // Empty space
+                          _buildActionButton(
+                            text: 'Next End',
+                            color: Colors.white,
+                            textColor: Colors.orange,
+                            onTap: _nextEnd,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      // Finish button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: session.isComplete()
+                              ? _finishTraining
+                              : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFFFB020),
+                            disabledBackgroundColor: Colors.grey[300],
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Finish',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          setState(() {
+            isKeypadVisible = !isKeypadVisible;
+            // Reset position when showing keypad
+            if (isKeypadVisible) {
+              keypadTopPosition = 0.0;
+            }
+          });
+        },
+        backgroundColor: const Color(0xFF10B982),
+        child: Icon(
+          isKeypadVisible ? Icons.keyboard_hide : Icons.keyboard,
+          color: Colors.white,
+        ),
       ),
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, color: const Color(0xFF10B982), size: 28),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
-        ),
-        Text(label, style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-      ],
-    );
-  }
-
-  Widget _buildScoreBox(String score) {
+  Widget _buildScoreBox(String score, {bool isCurrent = false}) {
     Color bgColor;
     Color textColor = Colors.white;
 
+    if (score.isEmpty) {
+      // Empty box for incomplete rounds
+      return Container(
+        width: 45,
+        height: 45,
+        decoration: BoxDecoration(
+          color: isCurrent ? const Color(0xFFFFE4B5) : Colors.grey[200],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isCurrent ? const Color(0xFFFF9800) : Colors.grey[300]!,
+            width: isCurrent ? 3 : 1,
+          ),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[400],
+          ),
+        ),
+      );
+    }
+
     switch (score) {
       case 'X':
+      case '10':
       case '9':
         bgColor = const Color(0xFFFBBF24);
         textColor = Colors.black;
@@ -460,360 +840,101 @@ class _InputScoringScreenState extends State<InputScoringScreen>
         bgColor = Colors.white;
         textColor = Colors.black;
         break;
-      default:
+      default: // 'M'
         bgColor = const Color(0xFF9CA3AF);
         break;
     }
 
     return Container(
-      width: 50,
-      height: 50,
+      width: 45,
+      height: 45,
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         border: score == '2' || score == '1'
             ? Border.all(color: Colors.grey, width: 2)
             : null,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       alignment: Alignment.center,
       child: Text(
         score,
         style: TextStyle(
-          fontSize: 18,
+          fontSize: 16,
           fontWeight: FontWeight.bold,
           color: textColor,
         ),
       ),
     );
   }
-}
 
-// Round Scoring Screen
-class RoundScoringScreen extends StatefulWidget {
-  final TrainingSession session;
-  final String playerName;
-  final int roundIndex;
-
-  const RoundScoringScreen({
-    super.key,
-    required this.session,
-    required this.playerName,
-    required this.roundIndex,
-  });
-
-  @override
-  State<RoundScoringScreen> createState() => _RoundScoringScreenState();
-}
-
-class _RoundScoringScreenState extends State<RoundScoringScreen> {
-  late List<String> currentRoundScores;
-  int currentArrow = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    currentRoundScores = List.generate(
-      widget.session.arrowsPerRound,
-      (_) => '',
-    );
-  }
-
-  void _inputScore(String score) {
-    if (currentArrow < widget.session.arrowsPerRound) {
-      setState(() {
-        currentRoundScores[currentArrow] = score;
-        currentArrow++;
-
-        if (currentArrow == widget.session.arrowsPerRound) {
-          _saveRound();
-        }
-      });
-    }
-  }
-
-  void _saveRound() {
-    if (widget.session.scores[widget.playerName] == null) {
-      widget.session.scores[widget.playerName] = [];
-    }
-    widget.session.scores[widget.playerName]!.add(
-      List.from(currentRoundScores),
-    );
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Rambahan ${widget.roundIndex + 1} tersimpan!'),
-        backgroundColor: const Color(0xFF10B982),
-        duration: const Duration(seconds: 1),
-      ),
-    );
-
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        Navigator.pop(context);
-      }
-    });
-  }
-
-  int _getCurrentTotal() {
-    int total = 0;
-    for (var score in currentRoundScores) {
-      total += widget.session.convertScoreToInt(score);
-    }
-    return total;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE8F5E9),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF10B982),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            if (currentArrow > 0) {
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Batalkan Input?'),
-                  content: const Text('Skor yang sudah diinput akan hilang.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Tidak'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.pop(context);
-                      },
-                      child: const Text(
-                        'Ya',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            } else {
-              Navigator.pop(context);
-            }
-          },
-        ),
-        title: Column(
-          children: [
-            Text(
-              widget.playerName,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 18,
-              ),
-            ),
-            Text(
-              'Rambahan ${widget.roundIndex + 1}',
-              style: const TextStyle(color: Colors.white70, fontSize: 14),
-            ),
-          ],
-        ),
-        centerTitle: true,
-      ),
-      body: Column(
-        children: [
-          // Progress Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            color: Colors.white,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Arrow ${currentArrow + 1}/${widget.session.arrowsPerRound}',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF10B982),
-                  ),
-                ),
-                Text(
-                  'Total: ${_getCurrentTotal()}',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Score Boxes
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Skor Arrow:',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: List.generate(widget.session.arrowsPerRound, (
-                      index,
-                    ) {
-                      return Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: index < currentArrow
-                              ? const Color(0xFFE8F5E9)
-                              : Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: index == currentArrow
-                                ? const Color(0xFF10B982)
-                                : Colors.grey[300]!,
-                            width: index == currentArrow ? 3 : 1,
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            currentRoundScores[index].isEmpty
-                                ? (index + 1).toString()
-                                : currentRoundScores[index],
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: currentRoundScores[index].isEmpty
-                                  ? Colors.grey[400]
-                                  : const Color(0xFF10B982),
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 30),
-          // Score Keypad
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: GridView.count(
-                shrinkWrap: true,
-                crossAxisCount: 3,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 1.0,
-                children: [
-                  _buildScoreButton(
-                    'X',
-                    '10',
-                    Colors.yellow[700]!,
-                    Colors.black,
-                  ),
-                  _buildScoreButton(
-                    '9',
-                    '9',
-                    Colors.yellow[700]!,
-                    Colors.black,
-                  ),
-                  _buildScoreButton('8', '8', Colors.red[600]!, Colors.white),
-                  _buildScoreButton('7', '7', Colors.red[600]!, Colors.white),
-                  _buildScoreButton('6', '6', Colors.blue[600]!, Colors.white),
-                  _buildScoreButton('5', '5', Colors.blue[500]!, Colors.white),
-                  _buildScoreButton('4', '4', Colors.black, Colors.white),
-                  _buildScoreButton('3', '3', Colors.black, Colors.white),
-                  _buildScoreButton('2', '2', Colors.white, Colors.black),
-                  _buildScoreButton('1', '1', Colors.white, Colors.black),
-                  _buildScoreButton('M', '0', Colors.grey[400]!, Colors.black),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildScoreButton(
-    String label,
-    String value,
-    Color color,
-    Color textColor,
-  ) {
+  Widget _buildKeypadButton(String label, Color bgColor, Color textColor) {
     return GestureDetector(
-      onTap: currentArrow < widget.session.arrowsPerRound
-          ? () => _inputScore(label)
-          : null,
+      onTap: () => _inputScoreQuick(label),
       child: Container(
         decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(16),
+          color: bgColor,
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: color == Colors.white ? Colors.grey[300]! : color,
-            width: 2,
+            color: (label == '2' || label == '1') ? Colors.grey[300]! : bgColor,
+            width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 3,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: textColor,
-              ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: textColor,
             ),
-            if (value.isNotEmpty)
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: textColor.withOpacity(0.7),
-                ),
-              ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    IconData? icon,
+    String? text,
+    required Color color,
+    Color? iconColor,
+    Color? textColor,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.orange, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 3,
+              offset: const Offset(0, 2),
+            ),
           ],
+        ),
+        child: Center(
+          child: icon != null
+              ? Icon(icon, color: iconColor, size: 16)
+              : Text(
+                  text!,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
         ),
       ),
     );

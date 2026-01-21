@@ -10,7 +10,8 @@ class TrainingSession {
   int arrowsPerRound;
   String targetType;
   Map<String, List<List<String>>> scores; // playerName -> rounds -> arrows
-  
+  String? trainingName; // Nama latihan
+
   TrainingSession({
     required this.id,
     required this.date,
@@ -20,6 +21,7 @@ class TrainingSession {
     required this.arrowsPerRound,
     required this.targetType,
     required this.scores,
+    this.trainingName,
   });
 
   int getTotalScore(String playerName) {
@@ -68,6 +70,7 @@ class TrainingSession {
       'arrowsPerRound': arrowsPerRound,
       'targetType': targetType,
       'scores': scores,
+      'trainingName': trainingName,
     };
   }
 
@@ -88,35 +91,101 @@ class TrainingSession {
           ),
         ),
       ),
+      trainingName: json['trainingName'],
+    );
+  }
+}
+
+// Training Template (Log Latihan) - untuk menyimpan konfigurasi latihan yang bisa dipakai ulang
+class TrainingTemplate {
+  String id;
+  String name; // Nama template/log (misal: "LATIHAN 50M Lomba")
+  int numberOfPlayers;
+  List<String> playerNames;
+  int numberOfRounds;
+  int arrowsPerRound;
+  String targetType;
+
+  TrainingTemplate({
+    required this.id,
+    required this.name,
+    required this.numberOfPlayers,
+    required this.playerNames,
+    required this.numberOfRounds,
+    required this.arrowsPerRound,
+    required this.targetType,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'numberOfPlayers': numberOfPlayers,
+      'playerNames': playerNames,
+      'numberOfRounds': numberOfRounds,
+      'arrowsPerRound': arrowsPerRound,
+      'targetType': targetType,
+    };
+  }
+
+  factory TrainingTemplate.fromJson(Map<String, dynamic> json) {
+    return TrainingTemplate(
+      id: json['id'],
+      name: json['name'],
+      numberOfPlayers: json['numberOfPlayers'],
+      playerNames: List<String>.from(json['playerNames']),
+      numberOfRounds: json['numberOfRounds'],
+      arrowsPerRound: json['arrowsPerRound'],
+      targetType: json['targetType'],
     );
   }
 }
 
 class TrainingData {
   static final TrainingData _instance = TrainingData._internal();
-  
+
   factory TrainingData() {
     return _instance;
   }
-  
+
   TrainingData._internal();
 
   List<TrainingSession> sessions = [];
   TrainingSession? currentSession;
+  List<TrainingTemplate> templates = []; // Log latihan templates
 
   Future<void> loadData() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Load sessions
     final sessionsJson = prefs.getString('training_sessions');
     if (sessionsJson != null) {
       final List<dynamic> decoded = json.decode(sessionsJson);
       sessions = decoded.map((json) => TrainingSession.fromJson(json)).toList();
     }
+
+    // Load templates
+    final templatesJson = prefs.getString('training_templates');
+    if (templatesJson != null) {
+      final List<dynamic> decoded = json.decode(templatesJson);
+      templates = decoded
+          .map((json) => TrainingTemplate.fromJson(json))
+          .toList();
+    }
   }
 
   Future<void> saveData() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Save sessions
     final sessionsJson = json.encode(sessions.map((s) => s.toJson()).toList());
     await prefs.setString('training_sessions', sessionsJson);
+
+    // Save templates
+    final templatesJson = json.encode(
+      templates.map((t) => t.toJson()).toList(),
+    );
+    await prefs.setString('training_templates', templatesJson);
   }
 
   void addSession(TrainingSession session) {
@@ -140,5 +209,20 @@ class TrainingData {
   List<TrainingSession> getCompletedSessions() {
     return sessions.where((s) => s.isComplete()).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  // Template management methods
+  Future<void> addTemplate(TrainingTemplate template) async {
+    templates.add(template);
+    await saveData();
+  }
+
+  Future<void> removeTemplate(TrainingTemplate template) async {
+    templates.remove(template);
+    await saveData();
+  }
+
+  List<TrainingTemplate> getTemplates() {
+    return templates..sort((a, b) => a.name.compareTo(b.name));
   }
 }

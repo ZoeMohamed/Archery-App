@@ -85,6 +85,7 @@ class _ArcherScoringScreenState extends State<ArcherScoringScreen> {
 
   Widget _buildTrainingCard(TrainingSession session) {
     String dateStr = DateFormat('d/M/yyyy').format(session.date);
+    String displayTitle = session.trainingName ?? 'Training $dateStr';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -118,12 +119,17 @@ class _ArcherScoringScreenState extends State<ArcherScoringScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Training $dateStr',
+                  displayTitle,
                   style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
                   ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  dateStr,
+                  style: TextStyle(fontSize: 13, color: Colors.grey[500]),
                 ),
                 const SizedBox(height: 4),
                 Text(

@@ -14,12 +14,53 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
   int _numberOfRounds = 6;
   int _arrowsPerRound = 6;
   String _selectedTarget = 'Target A';
+  final TextEditingController _trainingNameController = TextEditingController();
+  TrainingTemplate? _selectedTemplate;
+  List<TrainingTemplate> _templates = [];
+  bool _saveToLog = false; // Opsi simpan ke log latihan
   final List<TextEditingController> _playerNameControllers = [
     TextEditingController(),
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadTemplates();
+  }
+
+  Future<void> _loadTemplates() async {
+    await TrainingData().loadData();
+    setState(() {
+      _templates = TrainingData().getTemplates();
+    });
+  }
+
+  void _loadFromTemplate(TrainingTemplate template) {
+    setState(() {
+      _selectedTemplate = template;
+      _numberOfPlayers = template.numberOfPlayers;
+      _numberOfRounds = template.numberOfRounds;
+      _arrowsPerRound = template.arrowsPerRound;
+      _selectedTarget = template.targetType;
+      _trainingNameController.text = template.name;
+
+      // Update player controllers
+      _updatePlayerControllers(_numberOfPlayers);
+
+      // Fill player names
+      for (
+        int i = 0;
+        i < _numberOfPlayers && i < template.playerNames.length;
+        i++
+      ) {
+        _playerNameControllers[i].text = template.playerNames[i];
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    _trainingNameController.dispose();
     for (var controller in _playerNameControllers) {
       controller.dispose();
     }
@@ -39,7 +80,40 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
     }
   }
 
-  void _startTraining() {
+  Future<void> _saveAsTemplate() async {
+    List<String> playerNames = [];
+    if (_numberOfPlayers == 1) {
+      playerNames.add('Saya');
+    } else {
+      playerNames = _playerNameControllers
+          .take(_numberOfPlayers)
+          .map((c) => c.text.trim())
+          .toList();
+    }
+
+    final template = TrainingTemplate(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: _trainingNameController.text.trim(),
+      numberOfPlayers: _numberOfPlayers,
+      playerNames: playerNames,
+      numberOfRounds: _numberOfRounds,
+      arrowsPerRound: _arrowsPerRound,
+      targetType: _selectedTarget,
+    );
+
+    await TrainingData().addTemplate(template);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Template berhasil disimpan ke Log Latihan!'),
+          backgroundColor: Color(0xFF10B982),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  void _startTraining() async {
     // Validate
     if (_numberOfPlayers > 1) {
       bool hasEmptyName = _playerNameControllers
@@ -54,6 +128,11 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
         );
         return;
       }
+    }
+
+    // Save as template if requested
+    if (_saveToLog && _trainingNameController.text.trim().isNotEmpty) {
+      await _saveAsTemplate();
     }
 
     // Create training session
@@ -76,6 +155,9 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       arrowsPerRound: _arrowsPerRound,
       targetType: _selectedTarget,
       scores: {},
+      trainingName: _trainingNameController.text.trim().isNotEmpty
+          ? _trainingNameController.text.trim()
+          : null,
     );
 
     // Initialize scores
@@ -88,6 +170,73 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => TrainingConfirmationScreen(session: session),
+      ),
+    );
+  }
+
+  void _manageTemplates() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Kelola Log Latihan'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: _templates.isEmpty
+              ? const Padding(
+                  padding: EdgeInsets.all(20),
+                  child: Text(
+                    'Belum ada log latihan tersimpan',
+                    textAlign: TextAlign.center,
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _templates.length,
+                  itemBuilder: (context, index) {
+                    final template = _templates[index];
+                    return Card(
+                      child: ListTile(
+                        title: Text(
+                          template.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          '${template.numberOfPlayers} pemain • ${template.numberOfRounds} rambahan • ${template.arrowsPerRound} arrow',
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () async {
+                            await TrainingData().removeTemplate(template);
+                            setState(() {
+                              _templates = TrainingData().getTemplates();
+                              if (_selectedTemplate?.id == template.id) {
+                                _selectedTemplate = null;
+                              }
+                            });
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Log latihan dihapus'),
+                                backgroundColor: Color(0xFF10B982),
+                              ),
+                            );
+                            // Reopen dialog if there are still templates
+                            if (_templates.isNotEmpty) {
+                              _manageTemplates();
+                            }
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+        ],
       ),
     );
   }
@@ -126,6 +275,157 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                 ),
               ),
               const SizedBox(height: 30),
+              // Log Latihan Selector
+              if (_templates.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFF10B982),
+                      width: 2,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.history,
+                                color: Color(0xFF10B982),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Log Latihan',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                          TextButton.icon(
+                            onPressed: _manageTemplates,
+                            icon: const Icon(Icons.edit, size: 16),
+                            label: const Text('Kelola'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF10B982),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: const Color(0xFF10B982)),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<TrainingTemplate?>(
+                            value: _selectedTemplate,
+                            isExpanded: true,
+                            hint: const Text('Pilih log untuk auto-fill'),
+                            icon: const Icon(
+                              Icons.arrow_drop_down,
+                              color: Color(0xFF10B982),
+                            ),
+                            items: [
+                              const DropdownMenuItem<TrainingTemplate?>(
+                                value: null,
+                                child: Text('Tidak ada'),
+                              ),
+                              ..._templates.map((template) {
+                                return DropdownMenuItem<TrainingTemplate?>(
+                                  value: template,
+                                  child: Text(template.name),
+                                );
+                              }).toList(),
+                            ],
+                            onChanged: (TrainingTemplate? newValue) {
+                              if (newValue != null) {
+                                _loadFromTemplate(newValue);
+                              } else {
+                                setState(() {
+                                  _selectedTemplate = null;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (_templates.isNotEmpty) const SizedBox(height: 16),
+              // Nama Latihan Field
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF10B982), width: 2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.label, color: Color(0xFF10B982)),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Nama Latihan',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _trainingNameController,
+                      decoration: InputDecoration(
+                        hintText: 'Contoh: Latihan 50M, Tournament Prep',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF10B982),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF10B982),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF10B982),
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
               // Jumlah Pemain
               _buildNumberSelector(
                 label: 'Jumlah Pemain',
@@ -333,6 +633,52 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                               _buildScoreChip('2', Colors.grey[200]!),
                               _buildScoreChip('1', Colors.grey[200]!),
                             ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Simpan ke Log Latihan Checkbox
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF10B982), width: 2),
+                ),
+                child: Row(
+                  children: [
+                    Checkbox(
+                      value: _saveToLog,
+                      onChanged: (value) {
+                        setState(() {
+                          _saveToLog = value ?? false;
+                        });
+                      },
+                      activeColor: const Color(0xFF10B982),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Simpan ke Log Latihan',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Simpan konfigurasi ini untuk digunakan lagi',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[600],
+                            ),
                           ),
                         ],
                       ),
