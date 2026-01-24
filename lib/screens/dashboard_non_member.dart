@@ -7,6 +7,7 @@ import 'Mamber/pembayaran_screen.dart';
 import 'Mamber/notifikasi_screen.dart';
 import 'Mamber/lomba_screen.dart';
 import 'Mamber/kelas_screen.dart';
+import 'coach_training_history_screen.dart';
 import '../utils/user_data.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -421,6 +422,16 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       iconColor: Colors.white,
                       isLocked: !_canAccessMenu('latihan'),
                     ),
+                    if (_activeRole == 'coach' || _activeRole == 'admin')
+                      _buildMenuItem(
+                        context,
+                        icon: Icons.fact_check_outlined,
+                        title: 'Validasi Skor',
+                        subtitle: 'Pantau semua latihan',
+                        color: const Color(0xFF22C55E),
+                        iconColor: Colors.white,
+                        isLocked: !_canAccessMenu('validasi'),
+                      ),
                     _buildMenuItem(
                       context,
                       icon: Icons.assessment_outlined,
@@ -540,6 +551,13 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
         } else if (title == 'Riwayat Latihan') {
           // Navigate to Riwayat tab (index 3)
           widget.onNavigate?.call(3);
+        } else if (title == 'Validasi Skor') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const CoachTrainingHistoryScreen(),
+            ),
+          );
         } else if (title == 'Pembayaran') {
           Navigator.push(
             context,

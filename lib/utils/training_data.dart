@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class TrainingSession {
   String id;
+  String? supabaseId;
   DateTime date;
   int numberOfPlayers;
   List<String> playerNames;
@@ -14,6 +15,7 @@ class TrainingSession {
 
   TrainingSession({
     required this.id,
+    this.supabaseId,
     required this.date,
     required this.numberOfPlayers,
     required this.playerNames,
@@ -63,6 +65,7 @@ class TrainingSession {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'supabaseId': supabaseId,
       'date': date.toIso8601String(),
       'numberOfPlayers': numberOfPlayers,
       'playerNames': playerNames,
@@ -77,6 +80,7 @@ class TrainingSession {
   factory TrainingSession.fromJson(Map<String, dynamic> json) {
     return TrainingSession(
       id: json['id'],
+      supabaseId: json['supabaseId'],
       date: DateTime.parse(json['date']),
       numberOfPlayers: json['numberOfPlayers'],
       playerNames: List<String>.from(json['playerNames']),
@@ -209,6 +213,82 @@ class TrainingData {
   List<TrainingSession> getCompletedSessions() {
     return sessions.where((s) => s.isComplete()).toList()
       ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  Future<void> mergeRemoteSessions(List<TrainingSession> remoteSessions) async {
+    if (remoteSessions.isEmpty) {
+      return;
+    }
+
+    final existingBySupabaseId = <String, int>{};
+    for (var i = 0; i < sessions.length; i++) {
+      final supabaseId = sessions[i].supabaseId;
+      if (supabaseId != null && supabaseId.isNotEmpty) {
+        existingBySupabaseId[supabaseId] = i;
+      }
+    }
+
+    final existingBySignature = <String, int>{};
+    for (var i = 0; i < sessions.length; i++) {
+      final supabaseId = sessions[i].supabaseId;
+      if (supabaseId == null || supabaseId.isEmpty) {
+        existingBySignature[_buildSignature(sessions[i])] = i;
+      }
+    }
+
+    bool hasChanges = false;
+    for (final remote in remoteSessions) {
+      final remoteId = remote.supabaseId;
+      if (remoteId != null && existingBySupabaseId.containsKey(remoteId)) {
+        final index = existingBySupabaseId[remoteId]!;
+        sessions[index] = _mergeSession(sessions[index], remote);
+        hasChanges = true;
+        continue;
+      }
+
+      final signature = _buildSignature(remote);
+      if (existingBySignature.containsKey(signature)) {
+        final index = existingBySignature[signature]!;
+        sessions[index].supabaseId = remoteId;
+        sessions[index] = _mergeSession(sessions[index], remote);
+        hasChanges = true;
+        continue;
+      }
+
+      sessions.add(remote);
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
+      await saveData();
+    }
+  }
+
+  TrainingSession _mergeSession(
+    TrainingSession local,
+    TrainingSession remote,
+  ) {
+    return TrainingSession(
+      id: local.id,
+      supabaseId: remote.supabaseId ?? local.supabaseId,
+      date: remote.date,
+      numberOfPlayers: remote.numberOfPlayers,
+      playerNames: remote.playerNames,
+      numberOfRounds: remote.numberOfRounds,
+      arrowsPerRound: remote.arrowsPerRound,
+      targetType: remote.targetType,
+      scores: remote.scores,
+      trainingName: remote.trainingName ?? local.trainingName,
+    );
+  }
+
+  String _buildSignature(TrainingSession session) {
+    final month = session.date.month.toString().padLeft(2, '0');
+    final day = session.date.day.toString().padLeft(2, '0');
+    final dateKey = '${session.date.year}-$month-$day';
+    final nameKey = (session.trainingName ?? '').trim().toLowerCase();
+    return '$dateKey|${session.numberOfPlayers}|${session.numberOfRounds}'
+        '|${session.arrowsPerRound}|$nameKey';
   }
 
   // Template management methods

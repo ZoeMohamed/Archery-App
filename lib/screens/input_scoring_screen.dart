@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'training_result_screen.dart';
 import '../utils/training_data.dart';
+import '../services/supabase_training_service.dart';
 
 class InputScoringScreen extends StatefulWidget {
   const InputScoringScreen({super.key});
@@ -221,6 +222,33 @@ class _InputScoringScreenState extends State<InputScoringScreen>
 
   void _finishTraining() async {
     await TrainingData().saveCurrentSession();
+    try {
+      final supabaseId =
+          await SupabaseTrainingService().saveTrainingSession(session);
+      if (supabaseId.isNotEmpty) {
+        session.supabaseId = supabaseId;
+        await TrainingData().saveData();
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Latihan berhasil disimpan ke Supabase'),
+            backgroundColor: Color(0xFF10B982),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal simpan ke Supabase: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
     if (mounted) {
       // Navigate to Result Screen
       Navigator.of(context).pushReplacement(

@@ -35,6 +35,8 @@ class DbTrainingSession {
   final String mode;
   final String targetType;
   final String? distance;
+  final String? trainingName;
+  final int? numberOfPlayers;
   final int totalEnds;
   final int arrowsPerEnd;
   final List<DbGroupMember>? groupMembers;
@@ -51,6 +53,8 @@ class DbTrainingSession {
     required this.mode,
     required this.targetType,
     this.distance,
+    this.trainingName,
+    this.numberOfPlayers,
     required this.totalEnds,
     required this.arrowsPerEnd,
     this.groupMembers,
@@ -71,6 +75,8 @@ class DbTrainingSession {
       mode: json['mode']?.toString() ?? 'individual',
       targetType: json['target_type']?.toString() ?? 'bullet',
       distance: json['distance']?.toString(),
+      trainingName: json['training_name']?.toString(),
+      numberOfPlayers: (json['number_of_players'] as num?)?.toInt(),
       totalEnds: (json['total_ends'] as num?)?.toInt() ?? 0,
       arrowsPerEnd: (json['arrows_per_end'] as num?)?.toInt() ?? 0,
       groupMembers: rawMembers.isEmpty
@@ -93,6 +99,8 @@ class DbTrainingSession {
       'mode': mode,
       'target_type': targetType,
       'distance': distance,
+      'training_name': trainingName,
+      'number_of_players': numberOfPlayers,
       'total_ends': totalEnds,
       'arrows_per_end': arrowsPerEnd,
       'group_members': groupMembers?.map((m) => m.toJson()).toList(),

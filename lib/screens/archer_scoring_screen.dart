@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'training_result_screen.dart';
 import '../utils/training_data.dart';
+import '../services/supabase_training_service.dart';
 
 class ArcherScoringScreen extends StatefulWidget {
   const ArcherScoringScreen({super.key});
@@ -21,9 +22,22 @@ class _ArcherScoringScreenState extends State<ArcherScoringScreen> {
 
   Future<void> _loadData() async {
     await TrainingData().loadData();
-    setState(() {
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+
+    try {
+      final remoteSessions =
+          await SupabaseTrainingService().fetchTrainingHistory();
+      await TrainingData().mergeRemoteSessions(remoteSessions);
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      debugPrint('Supabase fetch failed, using local data: $e');
+    }
   }
 
   @override
