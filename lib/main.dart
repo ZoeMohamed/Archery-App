@@ -8,7 +8,12 @@ import 'services/supabase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('id_ID', null);
+  
+  try {
+    await initializeDateFormatting('id_ID', null);
+  } catch (e) {
+    print('Error initializing date formatting: $e');
+  }
 
   // Initialize Supabase
   try {
@@ -16,12 +21,13 @@ void main() async {
     print('Supabase initialized successfully');
   } catch (e) {
     print('Error initializing Supabase: $e');
+    // Continue even if Supabase fails to initialize
   }
   
   runApp(const MainApp());
 }
 
-const bool _debugAutoLoginEnabled = true;
+const bool _debugAutoLoginEnabled = false;
 const String _debugAutoLoginEmail = 'user@klub.com';
 const String _debugAutoLoginPassword = '22110436*';
 

@@ -18,7 +18,7 @@ class _InputScoringScreenState extends State<InputScoringScreen>
   int currentRoundIndex = 0;
   int currentArrowIndex = 0;
   double keypadTopPosition =
-      0.0; // Position offset for draggable keypad
+      0.0; // Position offset for draggable keypad (lowered)
   bool isKeypadVisible = true; // Toggle keypad visibility
 
   @override
@@ -223,8 +223,9 @@ class _InputScoringScreenState extends State<InputScoringScreen>
   void _finishTraining() async {
     await TrainingData().saveCurrentSession();
     try {
-      final supabaseId =
-          await SupabaseTrainingService().saveTrainingSession(session);
+      final supabaseId = await SupabaseTrainingService().saveTrainingSession(
+        session,
+      );
       if (supabaseId.isNotEmpty) {
         session.supabaseId = supabaseId;
         await TrainingData().saveData();
@@ -762,32 +763,6 @@ class _InputScoringScreenState extends State<InputScoringScreen>
                             onTap: _nextEnd,
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 3),
-                      // Finish button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: session.isComplete()
-                              ? _finishTraining
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFFB020),
-                            disabledBackgroundColor: Colors.grey[300],
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: const Text(
-                            'Finish',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
                       ),
                     ],
                   ),

@@ -8,6 +8,7 @@ import 'Mamber/notifikasi_screen.dart';
 import 'Mamber/lomba_screen.dart';
 import 'Mamber/kelas_screen.dart';
 import 'coach_training_history_screen.dart';
+import 'range_finder_screen.dart';
 import '../utils/user_data.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -39,7 +40,6 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
     _loadUserData();
   }
 
-
   Future<void> _loadUserData() async {
     setState(() => _isLoading = true);
 
@@ -54,8 +54,9 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
       print('Dashboard: isDemoMode = ${userData.isDemoMode}');
 
       final authUser = Supabase.instance.client.auth.currentUser;
-      final supabaseUserId =
-          userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+      final supabaseUserId = userData.userId.isNotEmpty
+          ? userData.userId
+          : authUser?.id ?? '';
 
       // Always fetch from Supabase when user id is available
       if (supabaseUserId.isNotEmpty) {
@@ -172,7 +173,9 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
 
   String _normalizeRole(String value) {
     var trimmed = value.trim();
-    if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 1) {
+    if (trimmed.startsWith('"') &&
+        trimmed.endsWith('"') &&
+        trimmed.length > 1) {
       trimmed = trimmed.substring(1, trimmed.length - 1);
     }
     return trimmed.trim();
@@ -498,6 +501,15 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       iconColor: Colors.white,
                       isLocked: !_canAccessMenu('absensi'),
                     ),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.center_focus_strong,
+                      title: 'Range Finder',
+                      subtitle: 'Ukur jarak target',
+                      color: const Color(0xFFEF4444),
+                      iconColor: Colors.white,
+                      isLocked: false,
+                    ),
                   ],
                 ),
               ],
@@ -577,6 +589,11 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (context) => const KelasScreen()),
+          );
+        } else if (title == 'Range Finder') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const RangeFinderScreen()),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
