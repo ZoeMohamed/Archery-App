@@ -34,7 +34,7 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
 
   // Target settings
   double _distanceMeters = 5.0;
-  double _targetDiameterCm = 30.0;
+  double _targetDiameterCm = 45.0;// Ganti Ke 45.0
   Offset _targetPosition = const Offset(0.5, 0.4);
 
   // Presets
