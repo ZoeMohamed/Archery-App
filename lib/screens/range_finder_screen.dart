@@ -34,8 +34,9 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
 
   // Target settings
   double _distanceMeters = 5.0;
-  double _targetDiameterCm = 45.0;// Ganti Ke 45.0
+  double _targetDiameterCm = 45.0;
   Offset _targetPosition = const Offset(0.5, 0.4);
+  double _targetScaleAdjustment = 0.6; // Scale adjustment 0.5x to 2.0x
 
   // Presets
   List<TargetPreset> _presets = [];
@@ -87,6 +88,19 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
         _presets = decoded.map((p) => TargetPreset.fromJson(p)).toList();
       });
     }
+
+    // Load scale adjustment
+    final savedScale = prefs.getDouble('target_scale_adjustment');
+    if (savedScale != null) {
+      setState(() {
+        _targetScaleAdjustment = savedScale;
+      });
+    }
+  }
+
+  Future<void> _saveScaleAdjustment() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('target_scale_adjustment', _targetScaleAdjustment);
   }
 
   Future<void> _savePresets() async {
@@ -149,12 +163,20 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
 
   double _calculateTargetSize() {
     // Calculate target size based on distance, diameter, and zoom level
-    // Using simple perspective projection
-    // Size decreases as distance increases but scales with zoom
-    final baseSizeAt5m = 80.0; // pixels at 5 meters for 30cm target
-    final scaleFactor = (_targetDiameterCm / 30.0) * (5.0 / _distanceMeters);
-    // Target size increases proportionally with zoom level
-    return baseSizeAt5m * scaleFactor * _currentZoom;
+    // Using angular size formula for accurate perspective
+    // Reference: 45cm diameter at 5m distance = base pixel size
+    final baseDistanceM = 5.0;
+    final baseDiameterCm = 45.0;
+    final basePixelSize = 120.0; // pixels for 45cm at 5m
+
+    // Angular size calculation: size on screen is proportional to diameter/distance
+    // targetSize = baseSize * (targetDiameter / baseDiameter) * (baseDistance / targetDistance)
+    final scaleFactor =
+        (_targetDiameterCm / baseDiameterCm) *
+        (baseDistanceM / _distanceMeters);
+
+    // Target size increases proportionally with zoom level and scale adjustment
+    return basePixelSize * scaleFactor * _currentZoom * _targetScaleAdjustment;
   }
 
   @override
@@ -185,7 +207,7 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
       body: _isCameraInitialized
           ? Stack(
               children: [
-                // Camera Preview
+                // Camera Preview with correct aspect ratio
                 Positioned.fill(
                   child: GestureDetector(
                     onScaleStart: (details) {
@@ -201,7 +223,14 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
                         });
                       }
                     },
-                    child: CameraPreview(_cameraController!),
+                    child: FittedBox(
+                      fit: BoxFit.cover,
+                      child: SizedBox(
+                        width: _cameraController!.value.previewSize!.height,
+                        height: _cameraController!.value.previewSize!.width,
+                        child: CameraPreview(_cameraController!),
+                      ),
+                    ),
                   ),
                 ),
 
@@ -425,6 +454,65 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
                                 });
                               }
                             },
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Ukuran Lingkaran di Kamera',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.remove_circle_outline,
+                                color: Colors.white,
+                              ),
+                              Expanded(
+                                child: Slider(
+                                  value: _targetScaleAdjustment,
+                                  min: 0.5,
+                                  max: 2.0,
+                                  divisions: 30,
+                                  label:
+                                      '${(_targetScaleAdjustment * 100).toStringAsFixed(0)}%',
+                                  activeColor: Colors.white,
+                                  inactiveColor: Colors.white30,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _targetScaleAdjustment = value;
+                                    });
+                                    _saveScaleAdjustment();
+                                  },
+                                ),
+                              ),
+                              const Icon(
+                                Icons.add_circle_outline,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '${(_targetScaleAdjustment * 100).toStringAsFixed(0)}%',
+                                  style: const TextStyle(
+                                    color: Color(0xFF10B982),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 16),
                           const Text(
