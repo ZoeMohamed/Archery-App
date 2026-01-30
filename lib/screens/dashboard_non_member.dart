@@ -464,6 +464,15 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       iconColor: Colors.white,
                       isLocked: !_canAccessMenu('riwayat'),
                     ),
+                    _buildMenuItem(
+                      context,
+                      icon: Icons.center_focus_strong,
+                      title: 'Range Finder',
+                      subtitle: 'Ukur jarak target',
+                      color: const Color(0xFFEF4444),
+                      iconColor: Colors.white,
+                      isLocked: false,
+                    ),
                     // Member-only features (locked for non-members)
                     _buildMenuItem(
                       context,
@@ -500,15 +509,6 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       color: const Color(0xFFF97316),
                       iconColor: Colors.white,
                       isLocked: !_canAccessMenu('absensi'),
-                    ),
-                    _buildMenuItem(
-                      context,
-                      icon: Icons.center_focus_strong,
-                      title: 'Range Finder',
-                      subtitle: 'Ukur jarak target',
-                      color: const Color(0xFFEF4444),
-                      iconColor: Colors.white,
-                      isLocked: false,
                     ),
                   ],
                 ),

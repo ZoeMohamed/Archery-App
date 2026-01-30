@@ -36,7 +36,7 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
   double _distanceMeters = 5.0;
   double _targetDiameterCm = 45.0;
   Offset _targetPosition = const Offset(0.5, 0.4);
-  double _targetScaleAdjustment = 0.6; // Scale adjustment 0.5x to 2.0x
+  double _targetScaleAdjustment = 0.6; // Scale adjustment 0.2x to 2.0x
 
   // Presets
   List<TargetPreset> _presets = [];
@@ -474,9 +474,9 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
                               Expanded(
                                 child: Slider(
                                   value: _targetScaleAdjustment,
-                                  min: 0.5,
+                                  min: 0.2,
                                   max: 2.0,
-                                  divisions: 30,
+                                  divisions: 36,
                                   label:
                                       '${(_targetScaleAdjustment * 100).toStringAsFixed(0)}%',
                                   activeColor: Colors.white,
