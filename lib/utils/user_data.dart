@@ -136,8 +136,31 @@ class UserData {
     memberNumber = '';
     isDemoMode = false;
     
-    // Clear from SharedPreferences
+    // Clear user-related keys from SharedPreferences (keep other app data)
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    const keys = [
+      'namaLengkap',
+      'namaPengguna',
+      'email',
+      'nomorTelepon',
+      'tanggalLahir',
+      'kategori',
+      'password',
+      'isMember',
+      'ktaStatus',
+      'membershipNumber',
+      'membershipValidFrom',
+      'membershipValidUntil',
+      'ktaImagePath',
+      'userId',
+      'role',
+      'isCoach',
+      'memberStatus',
+      'memberNumber',
+      'isDemoMode',
+    ];
+    for (final key in keys) {
+      await prefs.remove(key);
+    }
   }
 }

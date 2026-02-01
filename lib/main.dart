@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/login_screen.dart';
 import 'screens/main_navigation.dart';
 import 'services/supabase_service.dart';
+import 'utils/user_data.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,7 +47,7 @@ class MainApp extends StatelessWidget {
       ),
       home: kDebugMode && _debugAutoLoginEnabled
           ? const _DebugAutoLoginGate()
-          : const LoginScreen(),
+          : const _AuthGate(),
     );
   }
 }
@@ -136,5 +137,43 @@ class _DebugAutoLoginGateState extends State<_DebugAutoLoginGate> {
       );
     }
     return const MainNavigation();
+  }
+}
+
+class _AuthGate extends StatefulWidget {
+  const _AuthGate();
+
+  @override
+  State<_AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends State<_AuthGate> {
+  bool _isLoading = true;
+  bool _hasSession = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkSession();
+  }
+
+  Future<void> _checkSession() async {
+    await UserData().loadData();
+    final session = Supabase.instance.client.auth.currentSession;
+    if (!mounted) return;
+    setState(() {
+      _hasSession = session != null;
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return _hasSession ? const MainNavigation() : const LoginScreen();
   }
 }

@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'user_data.dart';
 
 class TrainingSession {
   String id;
@@ -157,19 +160,46 @@ class TrainingData {
   List<TrainingSession> sessions = [];
   TrainingSession? currentSession;
   List<TrainingTemplate> templates = []; // Log latihan templates
+  String? _storageOwnerKey;
+
+  Future<String> _resolveStorageOwnerKey() async {
+    final userData = UserData();
+    await userData.loadData();
+    final userId = userData.userId.trim();
+    if (userId.isNotEmpty) {
+      return userId;
+    }
+    final authUser = Supabase.instance.client.auth.currentUser;
+    if (authUser != null && authUser.id.isNotEmpty) {
+      userData.userId = authUser.id;
+      await userData.saveData();
+      return authUser.id;
+    }
+    return 'anonymous';
+  }
+
+  String _sessionsKey(String ownerKey) => 'training_sessions_$ownerKey';
+  String _templatesKey(String ownerKey) => 'training_templates_$ownerKey';
 
   Future<void> loadData() async {
     final prefs = await SharedPreferences.getInstance();
+    final ownerKey = await _resolveStorageOwnerKey();
+    if (_storageOwnerKey != ownerKey) {
+      sessions = [];
+      templates = [];
+      currentSession = null;
+      _storageOwnerKey = ownerKey;
+    }
 
     // Load sessions
-    final sessionsJson = prefs.getString('training_sessions');
+    final sessionsJson = prefs.getString(_sessionsKey(ownerKey));
     if (sessionsJson != null) {
       final List<dynamic> decoded = json.decode(sessionsJson);
       sessions = decoded.map((json) => TrainingSession.fromJson(json)).toList();
     }
 
     // Load templates
-    final templatesJson = prefs.getString('training_templates');
+    final templatesJson = prefs.getString(_templatesKey(ownerKey));
     if (templatesJson != null) {
       final List<dynamic> decoded = json.decode(templatesJson);
       templates = decoded
@@ -180,16 +210,18 @@ class TrainingData {
 
   Future<void> saveData() async {
     final prefs = await SharedPreferences.getInstance();
+    final ownerKey = _storageOwnerKey ?? await _resolveStorageOwnerKey();
+    _storageOwnerKey = ownerKey;
 
     // Save sessions
     final sessionsJson = json.encode(sessions.map((s) => s.toJson()).toList());
-    await prefs.setString('training_sessions', sessionsJson);
+    await prefs.setString(_sessionsKey(ownerKey), sessionsJson);
 
     // Save templates
     final templatesJson = json.encode(
       templates.map((t) => t.toJson()).toList(),
     );
-    await prefs.setString('training_templates', templatesJson);
+    await prefs.setString(_templatesKey(ownerKey), templatesJson);
   }
 
   void addSession(TrainingSession session) {

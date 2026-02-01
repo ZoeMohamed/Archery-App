@@ -400,18 +400,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           TextButton(
             onPressed: () {
-              // Jangan hapus data user, hanya navigasi ke login screen
-              // Data user tetap tersimpan untuk login berikutnya
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
-                (route) => false,
-              );
+              _performLogout();
             },
             child: const Text('Keluar', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
+    );
+  }
+
+  Future<void> _performLogout() async {
+    Navigator.pop(context);
+    try {
+      await Supabase.instance.client.auth.signOut();
+    } catch (_) {}
+
+    final userData = UserData();
+    await userData.clearData();
+
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
+      (route) => false,
     );
   }
 
