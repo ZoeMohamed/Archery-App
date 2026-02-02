@@ -1,9 +1,13 @@
-import 'package:flutter/material.dart';
-import 'verification_status_screen.dart';
-import '../utils/user_data.dart';
-import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
+
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../utils/user_data.dart';
+import 'kta_card_screen.dart';
+import 'verification_status_screen.dart';
 
 class UploadKtaScreen extends StatefulWidget {
   const UploadKtaScreen({super.key});
@@ -16,11 +20,80 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
   final _formKey = GlobalKey<FormState>();
   final _noAnggotaController = TextEditingController();
   String? _uploadedKtaImage;
+  bool _isCheckingStatus = true;
+  bool _isSubmitting = false;
+
+  static const String _ktaBucket = 'kta_app';
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    final userData = UserData();
+    await userData.loadData();
+    await _refreshKtaStatus(userData);
+    if (!mounted) return;
+    final status = userData.ktaStatus.toLowerCase().trim();
+    if (status == 'pending') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const VerificationStatusScreen(),
+        ),
+      );
+      return;
+    }
+    if (status == 'approved') {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const KtaCardScreen(),
+        ),
+      );
+      return;
+    }
+    setState(() {
+      _isCheckingStatus = false;
+    });
+  }
 
   @override
   void dispose() {
     _noAnggotaController.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshKtaStatus(UserData userData) async {
+    try {
+      final authUser = Supabase.instance.client.auth.currentUser;
+      final userId =
+          userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+      if (userId.isEmpty) {
+        return;
+      }
+      final response = await Supabase.instance.client
+          .from('kta_applications')
+          .select('status, created_at')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (response == null) {
+        userData.ktaStatus = 'none';
+        await userData.saveData();
+        return;
+      }
+      final status = response['status']?.toString();
+      if (status != null && status.trim().isNotEmpty) {
+        userData.ktaStatus = status.trim();
+        await userData.saveData();
+      }
+    } catch (_) {
+      // Ignore status refresh errors and keep local state.
+    }
   }
 
   void _pickKtaImage() async {
@@ -72,25 +145,261 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
       }
 
       // Update KTA status to pending and save image path
+      if (_isSubmitting) return;
+      setState(() {
+        _isSubmitting = true;
+      });
+
       final userData = UserData();
+      await userData.loadData();
+      final authUser = Supabase.instance.client.auth.currentUser;
+      final userId =
+          userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+      if (userId.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Silakan login terlebih dahulu.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          _isSubmitting = false;
+        });
+        return;
+      }
+      if (userData.userId.isEmpty && authUser != null) {
+        userData.userId = authUser.id;
+      }
+
+      var birthDate = _parseBirthDate(userData.tanggalLahir);
+      if (birthDate == null) {
+        birthDate = await _fetchBirthDateFromSupabase(userId);
+        if (birthDate != null) {
+          userData.tanggalLahir = _formatLocalDate(birthDate);
+          await userData.saveData();
+        }
+      }
+      if (birthDate == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Lengkapi tanggal lahir di profil terlebih dahulu.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          _isSubmitting = false;
+        });
+        return;
+      }
+
+      final confirmedName =
+          userData.namaLengkap.isNotEmpty ? userData.namaLengkap : userData.email;
+      if (confirmedName.trim().isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Nama lengkap belum tersedia.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          _isSubmitting = false;
+        });
+        return;
+      }
+
+      final profileReady = await _ensureUserProfile(userId, userData);
+      if (!profileReady) {
+        if (!mounted) return;
+        setState(() {
+          _isSubmitting = false;
+        });
+        return;
+      }
+
+      final ktaUrl = await _uploadKtaToSupabase(
+        userId: userId,
+        filePath: _uploadedKtaImage!,
+      );
+
+      if (ktaUrl == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Gagal upload foto KTA.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          _isSubmitting = false;
+        });
+        return;
+      }
+
+      try {
+        await Supabase.instance.client.from('kta_applications').insert({
+          'user_id': userId,
+          'confirmed_name': confirmedName.trim(),
+          'confirmed_birth_place': 'Tidak diketahui',
+          'confirmed_birth_date': birthDate.toIso8601String().split('T').first,
+          'confirmed_address': 'Tidak tersedia',
+          'kta_photo_url': ktaUrl,
+          'status': 'pending',
+        });
+      } catch (e) {
+        debugPrint('KTA insert failed: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan pengajuan KTA: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          _isSubmitting = false;
+        });
+        return;
+      }
+
       userData.ktaStatus = 'pending';
       userData.ktaImagePath = _uploadedKtaImage!;
+      userData.membershipNumber = _noAnggotaController.text.trim();
       await userData.saveData();
 
-      // Navigate to verification status screen
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const VerificationStatusScreen(),
+        ),
+      );
+    }
+  }
+
+  Future<bool> _ensureUserProfile(String userId, UserData userData) async {
+    try {
+      final existing = await Supabase.instance.client
+          .from('users')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+      if (existing != null) {
+        return true;
+      }
+
+      final email = userData.email.isNotEmpty
+          ? userData.email
+          : Supabase.instance.client.auth.currentUser?.email ?? '';
+      final fullName =
+          userData.namaLengkap.isNotEmpty ? userData.namaLengkap : email;
+
+      await Supabase.instance.client.from('users').insert({
+        'id': userId,
+        'email': email,
+        'full_name': fullName,
+        'roles': ['non_member'],
+        'active_role': 'non_member',
+      });
+      return true;
+    } catch (e) {
+      debugPrint('Ensure user profile failed: $e');
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const VerificationStatusScreen(),
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Profil pengguna belum ada di database. Hubungi admin untuk membuat profil.',
+            ),
+            backgroundColor: Colors.red,
           ),
         );
       }
+      return false;
     }
+  }
+
+  Future<String?> _uploadKtaToSupabase({
+    required String userId,
+    required String filePath,
+  }) async {
+    try {
+      final file = File(filePath);
+      final extension = filePath.split('.').last.toLowerCase();
+      final path =
+          'kta/$userId/${DateTime.now().millisecondsSinceEpoch}.$extension';
+
+      await Supabase.instance.client.storage.from(_ktaBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+          );
+
+      return Supabase.instance.client.storage.from(_ktaBucket).getPublicUrl(
+            path,
+          );
+    } catch (e) {
+      debugPrint('KTA upload failed: $e');
+      return null;
+    }
+  }
+
+  DateTime? _parseBirthDate(String value) {
+    if (value.trim().isEmpty) {
+      return null;
+    }
+    final parts = value.split('/');
+    if (parts.length == 3) {
+      final day = int.tryParse(parts[0]);
+      final month = int.tryParse(parts[1]);
+      final year = int.tryParse(parts[2]);
+      if (day == null || month == null || year == null) {
+        return null;
+      }
+      return DateTime(year, month, day);
+    }
+    return DateTime.tryParse(value);
+  }
+
+  Future<DateTime?> _fetchBirthDateFromSupabase(String userId) async {
+    try {
+      final response = await Supabase.instance.client
+          .from('users')
+          .select('birth_date')
+          .eq('id', userId)
+          .maybeSingle();
+      if (response == null) {
+        return null;
+      }
+      final raw = response['birth_date'];
+      if (raw is DateTime) {
+        return DateTime(raw.year, raw.month, raw.day);
+      }
+      if (raw is String && raw.trim().isNotEmpty) {
+        return DateTime.tryParse(raw);
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatLocalDate(DateTime value) {
+    final day = value.day.toString().padLeft(2, '0');
+    final month = value.month.toString().padLeft(2, '0');
+    return '$day/$month/${value.year}';
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isCheckingStatus) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF10B982)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF9FAFB),
       appBar: AppBar(
@@ -429,7 +738,7 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: _submitKta,
+                  onPressed: _isSubmitting ? null : _submitKta,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF10B982),
                     foregroundColor: Colors.white,
@@ -439,14 +748,24 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: const Text(
-                    'Kirim Verifikasi',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Text(
+                          'Kirim Verifikasi',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 20),

@@ -68,15 +68,14 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       setState(() => _isLoading = true);
 
       String? userId;
+      final dateParts = _tanggalLahirController.text.split('/');
+      final birthDate =
+          '${dateParts[2]}-${dateParts[1].padLeft(2, '0')}-${dateParts[0].padLeft(2, '0')}';
 
       try {
         print('Starting registration for: ${_emailController.text}');
 
         // Parse birth date to proper format (YYYY-MM-DD)
-        final dateParts = _tanggalLahirController.text.split('/');
-        final birthDate =
-            '${dateParts[2]}-${dateParts[1].padLeft(2, '0')}-${dateParts[0].padLeft(2, '0')}';
-
         print('Parsed birth date: $birthDate');
 
         // Try to signup - catch database errors but continue
@@ -143,6 +142,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           throw Exception('Gagal membuat akun. Silakan coba lagi.');
         }
 
+        final profileCreated = await _createUserProfile(
+          userId: userId,
+          birthDate: birthDate,
+        );
+        if (!profileCreated) {
+          if (mounted) {
+            setState(() => _isLoading = false);
+          }
+          return;
+        }
+
         // 2. Save to local storage immediately (bypass database profile for now)
         final userData = UserData();
         userData.userId = userId;
@@ -203,6 +213,17 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               print(
                 'Login recovery successful! User ID: ${loginResponse.user!.id}',
               );
+
+              final profileCreated = await _createUserProfile(
+                userId: loginResponse.user!.id,
+                birthDate: birthDate,
+              );
+              if (!profileCreated) {
+                if (mounted) {
+                  setState(() => _isLoading = false);
+                }
+                return;
+              }
 
               // Save to local storage
               final userData = UserData();
@@ -278,6 +299,36 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
           setState(() => _isLoading = false);
         }
       }
+    }
+  }
+
+  Future<bool> _createUserProfile({
+    required String userId,
+    required String birthDate,
+  }) async {
+    try {
+      await Supabase.instance.client.from('users').upsert({
+        'id': userId,
+        'email': _emailController.text.trim(),
+        'full_name': _namaLengkapController.text.trim(),
+        'phone_number': _nomorTeleponController.text.trim(),
+        'birth_date': birthDate,
+        'roles': ['non_member'],
+        'active_role': 'non_member',
+      });
+      return true;
+    } catch (e) {
+      print('Profile insert failed: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal menyimpan profil ke database: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      return false;
     }
   }
 

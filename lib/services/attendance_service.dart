@@ -56,7 +56,7 @@ class AttendanceService {
     await _deactivateActiveSessions(classId);
 
     final token = _uuid.v4();
-    final expiresAt = DateTime.now().toUtc().add(ttl);
+    final expiresAt = DateTime.now().add(ttl);
     final payload = {
       'class_id': classId,
       'coach_id': user.id,
@@ -145,6 +145,6 @@ class AttendanceService {
     if (expiresAt == null) {
       return false;
     }
-    return expiresAt.isBefore(DateTime.now().toUtc());
+    return expiresAt.isBefore(DateTime.now());
   }
 }

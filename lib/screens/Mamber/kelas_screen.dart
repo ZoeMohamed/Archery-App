@@ -13,11 +13,13 @@ class ClassSchedule {
   final String id;
   final String className;
   final String coach;
+  final String coachId;
   final DateTime dateTime;
   final String duration;
   final String location;
   final int maxParticipants;
   final int currentParticipants;
+  final int attendanceCount;
   final ClassStatus status;
   final bool isEnrolled;
   final bool hasAttended;
@@ -28,11 +30,13 @@ class ClassSchedule {
     required this.id,
     required this.className,
     required this.coach,
+    required this.coachId,
     required this.dateTime,
     required this.duration,
     required this.location,
     required this.maxParticipants,
     required this.currentParticipants,
+    this.attendanceCount = 0,
     required this.status,
     this.isEnrolled = false,
     this.hasAttended = false,
@@ -49,6 +53,7 @@ class ClassSchedule {
     String? location,
     int? maxParticipants,
     int? currentParticipants,
+    int? attendanceCount,
     ClassStatus? status,
     bool? isEnrolled,
     bool? hasAttended,
@@ -59,11 +64,13 @@ class ClassSchedule {
       id: id ?? this.id,
       className: className ?? this.className,
       coach: coach ?? this.coach,
+      coachId: coachId ?? this.coachId,
       dateTime: dateTime ?? this.dateTime,
       duration: duration ?? this.duration,
       location: location ?? this.location,
       maxParticipants: maxParticipants ?? this.maxParticipants,
       currentParticipants: currentParticipants ?? this.currentParticipants,
+      attendanceCount: attendanceCount ?? this.attendanceCount,
       status: status ?? this.status,
       isEnrolled: isEnrolled ?? this.isEnrolled,
       hasAttended: hasAttended ?? this.hasAttended,
@@ -89,6 +96,7 @@ class _KelasScreenState extends State<KelasScreen> {
   bool _isLoading = true;
   bool _supportsEnrollment = true;
   String? _errorMessage;
+  String? _currentUserId;
   final SupabaseClient _client = Supabase.instance.client;
   final AttendanceService _attendanceService = AttendanceService();
 
@@ -126,6 +134,7 @@ class _KelasScreenState extends State<KelasScreen> {
       if (user == null) {
         throw Exception('User belum login.');
       }
+      _currentUserId = user.id;
 
       final classRows = await _client
           .from('training_classes')
@@ -269,11 +278,13 @@ class _KelasScreenState extends State<KelasScreen> {
           id: classId,
           className: row['title']?.toString() ?? 'Kelas',
           coach: coachNames[coachId] ?? 'Pelatih',
+          coachId: coachId,
           dateTime: scheduledAt,
           duration: _formatDuration(durationMinutes),
           location: row['location']?.toString() ?? '-',
           maxParticipants: maxParticipants,
           currentParticipants: currentParticipants,
+          attendanceCount: attendanceCounts[classId] ?? 0,
           status: status,
           isEnrolled: isEnrolled,
           hasAttended: hasAttended,
@@ -782,6 +793,14 @@ class _KelasScreenState extends State<KelasScreen> {
   Widget build(BuildContext context) {
     final enrolledCount = _classes.where((c) => c.isEnrolled).length;
     final attendedCount = _classes.where((c) => c.hasAttended).length;
+    final createdCount = _isCoach
+        ? _classes.where((c) => c.coachId == _currentUserId).length
+        : 0;
+    final totalAttendance = _isCoach
+        ? _classes
+            .where((c) => c.coachId == _currentUserId)
+            .fold<int>(0, (sum, c) => sum + c.attendanceCount)
+        : 0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
@@ -827,13 +846,15 @@ class _KelasScreenState extends State<KelasScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           _buildStatCard(
-                            'Kelas Terdaftar',
-                            enrolledCount.toString(),
+                            _isCoach ? 'Kelas Dibuat' : 'Kelas Terdaftar',
+                            (_isCoach ? createdCount : enrolledCount)
+                                .toString(),
                             Icons.class_,
                           ),
                           _buildStatCard(
-                            'Kehadiran',
-                            attendedCount.toString(),
+                            _isCoach ? 'Total Kehadiran' : 'Kehadiran',
+                            (_isCoach ? totalAttendance : attendedCount)
+                                .toString(),
                             Icons.check_circle,
                           ),
                         ],

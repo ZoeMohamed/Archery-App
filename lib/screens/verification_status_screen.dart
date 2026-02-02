@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'main_navigation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../utils/user_data.dart';
-import 'package:intl/intl.dart';
+import 'kta_card_screen.dart';
+import 'upload_kta_screen.dart';
+import 'main_navigation.dart';
 
 enum VerificationStatus {
   pending,
@@ -17,11 +20,95 @@ class VerificationStatusScreen extends StatefulWidget {
 }
 
 class _VerificationStatusScreenState extends State<VerificationStatusScreen> {
-  // Untuk demo, kita set status pending dulu
   VerificationStatus _status = VerificationStatus.pending;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  Future<void> _loadStatus() async {
+    final userData = UserData();
+    await userData.loadData();
+    await _refreshKtaStatus(userData);
+    if (!mounted) return;
+    final mappedStatus = _mapStatus(userData.ktaStatus);
+    if (mappedStatus != VerificationStatus.pending) {
+      _redirectForStatus(mappedStatus);
+      return;
+    }
+    setState(() {
+      _status = mappedStatus;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _refreshKtaStatus(UserData userData) async {
+    try {
+      final authUser = Supabase.instance.client.auth.currentUser;
+      final userId =
+          userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+      if (userId.isEmpty) return;
+      final response = await Supabase.instance.client
+          .from('kta_applications')
+          .select('status, created_at')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      if (response == null) {
+        userData.ktaStatus = 'none';
+        await userData.saveData();
+        return;
+      }
+      final status = response['status']?.toString();
+      if (status != null && status.trim().isNotEmpty) {
+        userData.ktaStatus = status.trim();
+        await userData.saveData();
+      }
+    } catch (_) {
+      // Keep local status if refresh fails.
+    }
+  }
+
+  VerificationStatus _mapStatus(String raw) {
+    switch (raw.toLowerCase().trim()) {
+      case 'approved':
+        return VerificationStatus.approved;
+      case 'rejected':
+        return VerificationStatus.rejected;
+      default:
+        return VerificationStatus.pending;
+    }
+  }
+
+  void _redirectForStatus(VerificationStatus status) {
+    if (!mounted) return;
+    if (status == VerificationStatus.approved) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const KtaCardScreen()),
+      );
+      return;
+    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const UploadKtaScreen()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF10B982)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       appBar: AppBar(
@@ -113,128 +200,6 @@ class _VerificationStatusScreenState extends State<VerificationStatusScreen> {
                       _buildApprovedInfo()
                     else
                       _buildRejectedInfo(),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-              // Demo Buttons (untuk testing status)
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Demo: Ubah Status',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF6B7280),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _status = VerificationStatus.pending;
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFF59E0B),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: const Text(
-                              'Pending',
-                              style: TextStyle(fontSize: 12, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () async {
-                              setState(() {
-                                _status = VerificationStatus.approved;
-                              });
-                              
-                              // Activate membership as ADMIN
-                              final userData = UserData();
-                              userData.isMember = true;
-                              userData.ktaStatus = 'approved';
-                              userData.role = 'admin'; // Set role to ADMIN (bukan member)
-                              userData.isDemoMode = true; // Enable demo mode for manual approval
-                              
-                              // Generate membership number (format: AIA-YYYY-XXXX)
-                              final now = DateTime.now();
-                              final random = now.millisecondsSinceEpoch % 10000;
-                              userData.membershipNumber = 'AIA-${now.year}-${random.toString().padLeft(4, '0')}';
-                              
-                              // Set validity period (2 years from now)
-                              final validFrom = now;
-                              final validUntil = DateTime(now.year + 2, now.month, now.day);
-                              userData.membershipValidFrom = DateFormat('dd/MM/yyyy').format(validFrom);
-                              userData.membershipValidUntil = DateFormat('dd/MM/yyyy').format(validUntil);
-                              
-                              // Set demo data if not exists
-                              if (userData.namaLengkap.isEmpty) {
-                                userData.namaLengkap = 'Demo Member';
-                              }
-                              if (userData.kategori.isEmpty) {
-                                userData.kategori = 'Dewasa';
-                              }
-                              
-                              // Save to SharedPreferences
-                              await userData.saveData();
-                              
-                              print('Verification: Approved - isDemoMode=true, role=admin, isMember=true');
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF10B982),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: const Text(
-                              'Approved',
-                              style: TextStyle(fontSize: 12, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _status = VerificationStatus.rejected;
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFEF4444),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            child: const Text(
-                              'Rejected',
-                              style: TextStyle(fontSize: 12, color: Colors.white),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
