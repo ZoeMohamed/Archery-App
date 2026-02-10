@@ -19,6 +19,8 @@ class MainNavigation extends StatefulWidget {
 class _MainNavigationState extends State<MainNavigation> {
   int _currentIndex = 0;
   bool _isMember = false;
+  final GlobalKey<ArcherScoringScreenState> _archerScoringKey =
+      GlobalKey<ArcherScoringScreenState>();
 
   @override
   void initState() {
@@ -64,7 +66,7 @@ class _MainNavigationState extends State<MainNavigation> {
     ),
     const SetupTrainingScreen(),
     const SizedBox(), // Placeholder for center button
-    const ArcherScoringScreen(),
+    ArcherScoringScreen(key: _archerScoringKey),
     const ProfileScreen(),
   ];
 
@@ -109,6 +111,9 @@ class _MainNavigationState extends State<MainNavigation> {
                 setState(() {
                   _currentIndex = index;
                 });
+                if (index == 3) {
+                  _archerScoringKey.currentState?.refresh();
+                }
               }
             },
             items: const [

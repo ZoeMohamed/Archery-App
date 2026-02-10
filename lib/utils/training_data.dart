@@ -163,17 +163,21 @@ class TrainingData {
   String? _storageOwnerKey;
 
   Future<String> _resolveStorageOwnerKey() async {
+    final authUser = Supabase.instance.client.auth.currentUser;
+    if (authUser != null && authUser.id.isNotEmpty) {
+      final userData = UserData();
+      await userData.loadData();
+      if (userData.userId != authUser.id) {
+        userData.userId = authUser.id;
+        await userData.saveData();
+      }
+      return authUser.id;
+    }
     final userData = UserData();
     await userData.loadData();
     final userId = userData.userId.trim();
     if (userId.isNotEmpty) {
       return userId;
-    }
-    final authUser = Supabase.instance.client.auth.currentUser;
-    if (authUser != null && authUser.id.isNotEmpty) {
-      userData.userId = authUser.id;
-      await userData.saveData();
-      return authUser.id;
     }
     return 'anonymous';
   }
