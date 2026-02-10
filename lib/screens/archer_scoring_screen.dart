@@ -8,20 +8,26 @@ class ArcherScoringScreen extends StatefulWidget {
   const ArcherScoringScreen({super.key});
 
   @override
-  State<ArcherScoringScreen> createState() => _ArcherScoringScreenState();
+  State<ArcherScoringScreen> createState() => ArcherScoringScreenState();
 }
 
-class _ArcherScoringScreenState extends State<ArcherScoringScreen> {
+class ArcherScoringScreenState extends State<ArcherScoringScreen> {
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadData(showLoading: true);
   }
 
-  Future<void> _loadData() async {
-    await TrainingData().loadData();
+  Future<void> _loadData({bool showLoading = false}) async {
+    if (showLoading && mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+    final trainingData = TrainingData();
+    await trainingData.loadData();
     if (mounted) {
       setState(() {
         _isLoading = false;
@@ -29,15 +35,29 @@ class _ArcherScoringScreenState extends State<ArcherScoringScreen> {
     }
 
     try {
-      final remoteSessions =
-          await SupabaseTrainingService().fetchTrainingHistory();
-      await TrainingData().mergeRemoteSessions(remoteSessions);
+      final service = SupabaseTrainingService();
+      final remoteSessions = await service.fetchTrainingHistory();
+      await trainingData.mergeRemoteSessions(remoteSessions);
+      try {
+        final synced = await service.syncPendingSessions(
+          trainingData.sessions,
+        );
+        if (synced > 0) {
+          await trainingData.saveData();
+        }
+      } catch (e) {
+        debugPrint('Supabase sync failed, using merged data: $e');
+      }
       if (mounted) {
         setState(() {});
       }
     } catch (e) {
       debugPrint('Supabase fetch failed, using local data: $e');
     }
+  }
+
+  Future<void> refresh() async {
+    await _loadData(showLoading: false);
   }
 
   @override
@@ -63,37 +83,58 @@ class _ArcherScoringScreenState extends State<ArcherScoringScreen> {
         ),
         centerTitle: false,
       ),
-      body: sessions.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+      body: RefreshIndicator(
+        color: const Color(0xFF10B982),
+        onRefresh: refresh,
+        child: sessions.isEmpty
+            ? ListView(
+                padding: const EdgeInsets.all(20),
+                physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  Icon(Icons.sports_score, size: 100, color: Colors.grey[400]),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Belum ada latihan',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[600],
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.sports_score,
+                            size: 100,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            'Belum ada latihan',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Tarik ke bawah untuk refresh',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap tombol + untuk memulai',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[500]),
-                  ),
                 ],
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.all(20),
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: sessions.length,
+                itemBuilder: (context, index) {
+                  final session = sessions[index];
+                  return _buildTrainingCard(session);
+                },
               ),
-            )
-          : ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: sessions.length,
-              itemBuilder: (context, index) {
-                final session = sessions[index];
-                return _buildTrainingCard(session);
-              },
-            ),
+      ),
     );
   }
 

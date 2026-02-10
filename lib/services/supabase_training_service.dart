@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../adapters/supabase_training_adapter.dart';
@@ -100,6 +101,35 @@ class SupabaseTrainingService {
       final details = detailsBySession[session.id ?? ''] ?? [];
       return SupabaseTrainingAdapter.toLocalSession(session, details);
     }).toList();
+  }
+
+  Future<int> syncPendingSessions(List<TrainingSession> sessions) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User belum login.');
+    }
+
+    int syncedCount = 0;
+    for (final session in sessions) {
+      if (!session.isComplete()) {
+        continue;
+      }
+      final supabaseId = session.supabaseId;
+      if (supabaseId != null && supabaseId.isNotEmpty) {
+        continue;
+      }
+      try {
+        final savedId = await saveTrainingSession(session);
+        if (savedId.isNotEmpty) {
+          session.supabaseId = savedId;
+          syncedCount++;
+        }
+      } catch (e) {
+        // Keep going; a single failure shouldn't block the rest.
+        debugPrint('Failed to sync training session: $e');
+      }
+    }
+    return syncedCount;
   }
 
   Map<String, dynamic> _cleanPayload(Map<String, dynamic> payload) {
