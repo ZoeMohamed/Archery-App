@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/login_screen.dart';
@@ -9,7 +10,13 @@ import 'utils/user_data.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Lock orientation to portrait only
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]);
+
   try {
     await initializeDateFormatting('id_ID', null);
   } catch (e) {
@@ -24,7 +31,7 @@ void main() async {
     print('Error initializing Supabase: $e');
     // Continue even if Supabase fails to initialize
   }
-  
+
   runApp(const MainApp());
 }
 
@@ -94,9 +101,7 @@ class _DebugAutoLoginGateState extends State<_DebugAutoLoginGate> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_errorMessage != null) {
       return Scaffold(
@@ -108,10 +113,7 @@ class _DebugAutoLoginGateState extends State<_DebugAutoLoginGate> {
               children: [
                 const Text(
                   'Debug auto-login failed.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -123,9 +125,7 @@ class _DebugAutoLoginGateState extends State<_DebugAutoLoginGate> {
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pushReplacement(
-                      MaterialPageRoute(
-                        builder: (_) => const LoginScreen(),
-                      ),
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
                     );
                   },
                   child: const Text('Go to login'),
@@ -170,9 +170,7 @@ class _AuthGateState extends State<_AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return _hasSession ? const MainNavigation() : const LoginScreen();
   }

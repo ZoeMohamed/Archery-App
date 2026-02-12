@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'training_result_screen.dart';
+import 'summary_table_screen.dart';
 import '../utils/training_data.dart';
 import '../services/supabase_training_service.dart';
+import '../widgets/target_face_input.dart';
 
 class InputScoringScreen extends StatefulWidget {
   const InputScoringScreen({super.key});
@@ -20,6 +22,7 @@ class _InputScoringScreenState extends State<InputScoringScreen>
   double keypadTopPosition =
       0.0; // Position offset for draggable keypad (lowered)
   bool isKeypadVisible = true; // Toggle keypad visibility
+  double targetFaceSize = 0.7; // Target face size (70% of screen width for better visibility)
 
   @override
   void initState() {
@@ -52,6 +55,20 @@ class _InputScoringScreenState extends State<InputScoringScreen>
       session.scores[playerName]!.add(
         List.generate(session.arrowsPerRound, (_) => ''),
       );
+    }
+
+    // Initialize hit coordinates for target face input
+    if (session.inputMethod == 'target_face') {
+      session.hitCoordinates ??= {};
+      if (session.hitCoordinates![playerName] == null) {
+        session.hitCoordinates![playerName] = [];
+      }
+      while (session.hitCoordinates![playerName]!.length <
+          session.numberOfRounds) {
+        session.hitCoordinates![playerName]!.add(
+          List.generate(session.arrowsPerRound, (_) => {'x': 0.0, 'y': 0.0}),
+        );
+      }
     }
   }
 
@@ -144,10 +161,22 @@ class _InputScoringScreenState extends State<InputScoringScreen>
     String playerName,
     int roundIndex,
     int arrowIndex,
-    String score,
-  ) {
+    String score, {
+    double? hitX,
+    double? hitY,
+  }) {
     setState(() {
       session.scores[playerName]![roundIndex][arrowIndex] = score;
+
+      // Save hit coordinates for target face input
+      if (session.inputMethod == 'target_face' &&
+          hitX != null &&
+          hitY != null) {
+        session.hitCoordinates![playerName]![roundIndex][arrowIndex] = {
+          'x': hitX,
+          'y': hitY,
+        };
+      }
 
       // Auto-advance to next arrow
       currentArrowIndex++;
@@ -199,6 +228,16 @@ class _InputScoringScreenState extends State<InputScoringScreen>
 
       // Clear the score
       session.scores[playerName]![currentRoundIndex][currentArrowIndex] = '';
+
+      // Clear hit coordinates
+      if (session.inputMethod == 'target_face' &&
+          session.hitCoordinates != null) {
+        session
+            .hitCoordinates![playerName]![currentRoundIndex][currentArrowIndex] = {
+          'x': 0.0,
+          'y': 0.0,
+        };
+      }
     });
   }
 
@@ -265,8 +304,19 @@ class _InputScoringScreenState extends State<InputScoringScreen>
     if (session.scores[playerName] != null) {
       for (var round in session.scores[playerName]!) {
         for (var score in round) {
-          if (score == 'X' || score == '10') {
-            golds++;
+          // For Face Ring 6: 6,5,4 are golds. For others: X,10 are golds
+          if (session.targetType == 'Face Ring 6') {
+            if (score == '6' || score == '5' || score == '4') {
+              golds++;
+            }
+          } else if (session.targetType == 'Face Mega Mendung') {
+            if (score == '10' || score == '9' || score == '8') {
+              golds++;
+            }
+          } else {
+            if (score == 'X' || score == '10') {
+              golds++;
+            }
           }
         }
       }
@@ -342,7 +392,7 @@ class _InputScoringScreenState extends State<InputScoringScreen>
           },
         ),
         title: Text(
-          currentPlayerName,
+          'Target: ${session.targetType}',
           style: const TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
@@ -401,16 +451,8 @@ class _InputScoringScreenState extends State<InputScoringScreen>
               ],
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                Text(
-                  'Target: ${session.targetType}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
                 Row(
                   children: [
                     Container(
@@ -479,7 +521,7 @@ class _InputScoringScreenState extends State<InputScoringScreen>
                     context,
                     MaterialPageRoute(
                       builder: (context) =>
-                          AverageTableScreen(session: session),
+                          SummaryTableScreen(session: session),
                     ),
                   );
                 },
@@ -489,7 +531,7 @@ class _InputScoringScreenState extends State<InputScoringScreen>
                   color: Color(0xFF10B982),
                 ),
                 label: const Text(
-                  'Detail',
+                  'Tabel Ringkasan',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -668,7 +710,7 @@ class _InputScoringScreenState extends State<InputScoringScreen>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            'AVG: ${_getAverageScore(currentPlayerName).toStringAsFixed(2)}',
+                            'Rambahan: ${currentRoundIndex + 1}/${session.numberOfRounds}',
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -677,7 +719,7 @@ class _InputScoringScreenState extends State<InputScoringScreen>
                           ),
                           const SizedBox(width: 12),
                           Text(
-                            'Total: ${_getTotalScore(currentPlayerName)}',
+                            'Arrow: ${currentArrowIndex + 1}/${session.arrowsPerRound}',
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -687,83 +729,382 @@ class _InputScoringScreenState extends State<InputScoringScreen>
                         ],
                       ),
                       const SizedBox(height: 6), //
-                      // Keypad grid
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 4,
-                        mainAxisSpacing: 3,
-                        crossAxisSpacing: 3,
-                        childAspectRatio: 2.0,
-                        children: [
-                          _buildKeypadButton(
-                            'X',
-                            const Color(0xFFFBBF24),
-                            Colors.black,
-                          ),
-                          _buildKeypadButton(
-                            '10',
-                            const Color(0xFFFBBF24),
-                            Colors.black,
-                          ),
-                          _buildKeypadButton(
-                            '9',
-                            const Color(0xFFFBBF24),
-                            Colors.black,
-                          ),
-                          _buildKeypadButton(
-                            '8',
-                            const Color(0xFFEF4444),
-                            Colors.white,
-                          ),
-                          _buildKeypadButton(
-                            '7',
-                            const Color(0xFFEF4444),
-                            Colors.white,
-                          ),
-                          _buildKeypadButton(
-                            '6',
-                            const Color(0xFF3B82F6),
-                            Colors.white,
-                          ),
-                          _buildKeypadButton(
-                            '5',
-                            const Color(0xFF3B82F6),
-                            Colors.white,
-                          ),
-                          _buildActionButton(
-                            icon: Icons.arrow_back,
-                            color: Colors.white,
-                            iconColor: Colors.orange,
-                            onTap: _deleteLastScore,
-                          ),
-                          _buildKeypadButton(
-                            '4',
-                            const Color(0xFF1F2937),
-                            Colors.white,
-                          ),
-                          _buildKeypadButton(
-                            '3',
-                            const Color(0xFF1F2937),
-                            Colors.white,
-                          ),
-                          _buildKeypadButton('2', Colors.white, Colors.black),
-                          _buildKeypadButton('1', Colors.white, Colors.black),
-                          _buildKeypadButton(
-                            'M',
-                            const Color(0xFF10B982),
-                            Colors.white,
-                          ),
-                          const SizedBox(), // Empty space
-                          const SizedBox(), // Empty space
-                          _buildActionButton(
-                            text: 'Next End',
-                            color: Colors.white,
-                            textColor: Colors.orange,
-                            onTap: _nextEnd,
-                          ),
-                        ],
-                      ),
+                      // Keypad grid or Target Face
+                      if (session.inputMethod == 'arrow_values')
+                        GridView.count(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 3,
+                          crossAxisSpacing: 3,
+                          childAspectRatio: 2.0,
+                          children: session.targetType == 'Face Ring 6'
+                              ? [
+                                  // Face Ring 6 keypad
+                                  _buildKeypadButton(
+                                    '6',
+                                    const Color(0xFFFBBF24), // Gold
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '5',
+                                    const Color(0xFFFBBF24), // Gold
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '4',
+                                    const Color(0xFFFBBF24), // Gold
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '3',
+                                    const Color(0xFFEF4444), // Red
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '2',
+                                    Colors.white, // White
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '1',
+                                    const Color(0xFF3B82F6), // Blue
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    'M',
+                                    const Color(0xFF10B982),
+                                    Colors.white,
+                                  ),
+                                  _buildActionButton(
+                                    icon: Icons.arrow_back,
+                                    color: Colors.white,
+                                    iconColor: Colors.orange,
+                                    onTap: _deleteLastScore,
+                                  ),
+                                  const SizedBox(), // Empty space
+                                  const SizedBox(), // Empty space
+                                  const SizedBox(), // Empty space
+                                  _buildActionButton(
+                                    text: 'Next End',
+                                    color: Colors.white,
+                                    textColor: Colors.orange,
+                                    onTap: _nextEnd,
+                                  ),
+                                ]
+                              : session.targetType == 'Ring Puta'
+                              ? [
+                                  // Ring Puta keypad
+                                  _buildKeypadButton(
+                                    '2',
+                                    Colors.white, // White
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '1',
+                                    const Color(0xFF7C2D2D), // Reddish Brown
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    'M',
+                                    const Color(0xFF10B982),
+                                    Colors.white,
+                                  ),
+                                  _buildActionButton(
+                                    icon: Icons.arrow_back,
+                                    color: Colors.white,
+                                    iconColor: Colors.orange,
+                                    onTap: _deleteLastScore,
+                                  ),
+                                  const SizedBox(), // Empty space
+                                  const SizedBox(), // Empty space
+                                  const SizedBox(), // Empty space
+                                  _buildActionButton(
+                                    text: 'Next End',
+                                    color: Colors.white,
+                                    textColor: Colors.orange,
+                                    onTap: _nextEnd,
+                                  ),
+                                ]
+                              : session.targetType == 'Face Mega Mendung'
+                              ? [
+                                  // Face Mega Mendung keypad
+                                  _buildKeypadButton(
+                                    '10',
+                                    const Color(0xFFFBBF24), // Yellow
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '9',
+                                    const Color(0xFFEF4444), // Red
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '8',
+                                    Colors.white,
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '7',
+                                    const Color(0xFF60A5FA), // Light Blue
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '6',
+                                    const Color(0xFFFBBF24), // Yellow
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '5',
+                                    const Color(0xFFEF4444), // Red
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '4',
+                                    Colors.white,
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '3',
+                                    const Color(0xFF60A5FA), // Light Blue
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '2',
+                                    const Color(0xFF1E3A8A), // Dark Blue
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '1',
+                                    Colors.white,
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    'M',
+                                    const Color(0xFF10B982),
+                                    Colors.white,
+                                  ),
+                                  _buildActionButton(
+                                    icon: Icons.arrow_back,
+                                    color: Colors.white,
+                                    iconColor: Colors.orange,
+                                    onTap: _deleteLastScore,
+                                  ),
+                                  const SizedBox(), // Empty space
+                                  const SizedBox(), // Empty space
+                                  const SizedBox(), // Empty space
+                                  _buildActionButton(
+                                    text: 'Next End',
+                                    color: Colors.white,
+                                    textColor: Colors.orange,
+                                    onTap: _nextEnd,
+                                  ),
+                                ]
+                              : [
+                                  // Default keypad (original)
+                                  _buildKeypadButton(
+                                    'X',
+                                    const Color(0xFFFBBF24),
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '10',
+                                    const Color(0xFFFBBF24),
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '9',
+                                    const Color(0xFFFBBF24),
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '8',
+                                    const Color(0xFFEF4444),
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '7',
+                                    const Color(0xFFEF4444),
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '6',
+                                    const Color(0xFF3B82F6),
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '5',
+                                    const Color(0xFF3B82F6),
+                                    Colors.white,
+                                  ),
+                                  _buildActionButton(
+                                    icon: Icons.arrow_back,
+                                    color: Colors.white,
+                                    iconColor: Colors.orange,
+                                    onTap: _deleteLastScore,
+                                  ),
+                                  _buildKeypadButton(
+                                    '4',
+                                    const Color(0xFF1F2937),
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '3',
+                                    const Color(0xFF1F2937),
+                                    Colors.white,
+                                  ),
+                                  _buildKeypadButton(
+                                    '2',
+                                    Colors.white,
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    '1',
+                                    Colors.white,
+                                    Colors.black,
+                                  ),
+                                  _buildKeypadButton(
+                                    'M',
+                                    const Color(0xFF10B982),
+                                    Colors.white,
+                                  ),
+                                  const SizedBox(), // Empty space
+                                  const SizedBox(), // Empty space
+                                  _buildActionButton(
+                                    text: 'Next End',
+                                    color: Colors.white,
+                                    textColor: Colors.orange,
+                                    onTap: _nextEnd,
+                                  ),
+                                ],
+                        )
+                      else
+                        // Target Face Input
+                        Column(
+                          children: [
+                            // Size controls for target face
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildActionButton(
+                                    icon: Icons.remove,
+                                    color: Colors.grey[300]!,
+                                    iconColor: Colors.black87,
+                                    onTap: () {
+                                      setState(() {
+                                        if (targetFaceSize > 0.3) {
+                                          targetFaceSize -= 0.1;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                // Size indicator
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF10B982).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: const Color(0xFF10B982),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${(targetFaceSize * 100).toInt()}%',
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF10B982),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildActionButton(
+                                    icon: Icons.add,
+                                    color: Colors.grey[300]!,
+                                    iconColor: Colors.black87,
+                                    onTap: () {
+                                      setState(() {
+                                        if (targetFaceSize < 0.9) {
+                                          targetFaceSize += 0.1;
+                                        }
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Action buttons for target face
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: _buildActionButton(
+                                    icon: Icons.arrow_back,
+                                    color: const Color(0xFFEF4444),
+                                    iconColor: Colors.white,
+                                    onTap: _deleteLastScore,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: _buildActionButton(
+                                    text: 'Next End',
+                                    color: const Color(0xFF10B982),
+                                    textColor: Colors.white,
+                                    onTap: _nextEnd,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            // Target face container dengan padding yang responsif terhadap ukuran
+                            Container(
+                              padding: EdgeInsets.all(8.0 + (4.0 * (1 - targetFaceSize))), // Padding lebih kecil saat target besar
+                              child: TargetFaceInput(
+                                targetType: session.targetType,
+                                targetSize: targetFaceSize,
+                                hits:
+                                    session
+                                        .hitCoordinates?[currentPlayerName]?[currentRoundIndex] ??
+                                    [],
+                                onTap: (score, x, y) {
+                                  String playerName =
+                                      session.playerNames[selectedPlayerIndex];
+
+                                  // Check if current position is valid
+                                  if (currentRoundIndex >=
+                                      session.numberOfRounds)
+                                    return;
+                                  if (currentArrowIndex >=
+                                      session.arrowsPerRound)
+                                    return;
+
+                                  // Check if position already filled
+                                  if (session
+                                      .scores[playerName]![currentRoundIndex][currentArrowIndex]
+                                      .isNotEmpty) {
+                                    return;
+                                  }
+
+                                  _inputScore(
+                                    playerName,
+                                    currentRoundIndex,
+                                    currentArrowIndex,
+                                    score.toString(),
+                                    hitX: x,
+                                    hitY: y,
+                                  );
+                                },
+                              ),
+                            ),
+                            // Padding bottom minimal untuk navigation bar
+                            SizedBox(height: 8.0 + (8.0 * (1 - targetFaceSize))),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -819,33 +1160,124 @@ class _InputScoringScreenState extends State<InputScoringScreen>
       );
     }
 
-    switch (score) {
-      case 'X':
-      case '10':
-      case '9':
-        bgColor = const Color(0xFFFBBF24);
-        textColor = Colors.black;
-        break;
-      case '8':
-      case '7':
-        bgColor = const Color(0xFFEF4444);
-        break;
-      case '6':
-      case '5':
-        bgColor = const Color(0xFF3B82F6);
-        break;
-      case '4':
-      case '3':
-        bgColor = const Color(0xFF1F2937);
-        break;
-      case '2':
-      case '1':
-        bgColor = Colors.white;
-        textColor = Colors.black;
-        break;
-      default: // 'M'
-        bgColor = const Color(0xFF9CA3AF);
-        break;
+    // Different color schemes for different target types
+    if (session.targetType == 'Face Ring 6') {
+      switch (score) {
+        case '6':
+        case '5':
+        case '4':
+          bgColor = const Color(0xFFFBBF24); // Gold
+          textColor = Colors.black;
+          break;
+        case '3':
+          bgColor = const Color(0xFFEF4444); // Red
+          textColor = Colors.white;
+          break;
+        case '2':
+          bgColor = Colors.white; // White
+          textColor = Colors.black;
+          break;
+        case '1':
+          bgColor = const Color(0xFF3B82F6); // Blue
+          textColor = Colors.white;
+          break;
+        default: // 'M'
+          bgColor = const Color(0xFF9CA3AF);
+          textColor = Colors.white;
+          break;
+      }
+    } else if (session.targetType == 'Ring Puta') {
+      switch (score) {
+        case '2':
+          bgColor = const Color(0xFF7C2D2D); // Reddish Brown
+          textColor = Colors.white;
+          break;
+        case '1':
+          bgColor = Colors.white; // White
+          textColor = Colors.black;
+          break;
+        default: // 'M'
+          bgColor = const Color(0xFF9CA3AF);
+          textColor = Colors.white;
+          break;
+      }
+    } else if (session.targetType == 'Face Mega Mendung') {
+      switch (score) {
+        case '10':
+          bgColor = const Color(0xFFFBBF24); // Yellow
+          textColor = Colors.black;
+          break;
+        case '9':
+          bgColor = const Color(0xFFEF4444); // Red
+          textColor = Colors.white;
+          break;
+        case '8':
+          bgColor = Colors.white;
+          textColor = Colors.black;
+          break;
+        case '7':
+          bgColor = const Color(0xFF60A5FA); // Light Blue
+          textColor = Colors.white;
+          break;
+        case '6':
+          bgColor = const Color(0xFFFBBF24); // Yellow
+          textColor = Colors.black;
+          break;
+        case '5':
+          bgColor = const Color(0xFFEF4444); // Red
+          textColor = Colors.white;
+          break;
+        case '4':
+          bgColor = Colors.white;
+          textColor = Colors.black;
+          break;
+        case '3':
+          bgColor = const Color(0xFF60A5FA); // Light Blue
+          textColor = Colors.white;
+          break;
+        case '2':
+          bgColor = const Color(0xFF1E3A8A); // Dark Blue
+          textColor = Colors.white;
+          break;
+        case '1':
+          bgColor = Colors.white;
+          textColor = Colors.black;
+          break;
+        default: // 'M'
+          bgColor = const Color(0xFF9CA3AF);
+          textColor = Colors.white;
+          break;
+      }
+    } else {
+      // Default colors
+      switch (score) {
+        case 'X':
+        case '10':
+        case '9':
+          bgColor = const Color(0xFFFBBF24);
+          textColor = Colors.black;
+          break;
+        case '8':
+        case '7':
+          bgColor = const Color(0xFFEF4444);
+          break;
+        case '6':
+        case '5':
+          bgColor = const Color(0xFF3B82F6);
+          break;
+        case '4':
+        case '3':
+          bgColor = const Color(0xFF1F2937);
+          break;
+        case '2':
+        case '1':
+          bgColor = Colors.white;
+          textColor = Colors.black;
+          break;
+        default: // 'M'
+          bgColor = const Color(0xFF9CA3AF);
+          break;
+      }
     }
 
     return Container(

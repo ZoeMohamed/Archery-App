@@ -13,7 +13,8 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
   int _numberOfPlayers = 1;
   int _numberOfRounds = 6;
   int _arrowsPerRound = 6;
-  String _selectedTarget = 'Target A';
+  String _selectedTarget = 'Default';
+  String _inputMethod = 'arrow_values'; // 'arrow_values' or 'target_face'
   final TextEditingController _trainingNameController = TextEditingController();
   TrainingTemplate? _selectedTemplate;
   List<TrainingTemplate> _templates = [];
@@ -42,6 +43,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       _numberOfRounds = template.numberOfRounds;
       _arrowsPerRound = template.arrowsPerRound;
       _selectedTarget = template.targetType;
+      _inputMethod = template.inputMethod;
       _trainingNameController.text = template.name;
 
       // Update player controllers
@@ -99,6 +101,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       numberOfRounds: _numberOfRounds,
       arrowsPerRound: _arrowsPerRound,
       targetType: _selectedTarget,
+      inputMethod: _inputMethod,
     );
 
     await TrainingData().addTemplate(template);
@@ -154,6 +157,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       numberOfRounds: _numberOfRounds,
       arrowsPerRound: _arrowsPerRound,
       targetType: _selectedTarget,
+      inputMethod: _inputMethod,
       scores: {},
       trainingName: _trainingNameController.text.trim().isNotEmpty
           ? _trainingNameController.text.trim()
@@ -531,6 +535,9 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                 },
               ),
               const SizedBox(height: 16),
+              // Metode Input Scoring
+              _buildInputMethodSelector(),
+              const SizedBox(height: 16),
               // Jenis Target
               Container(
                 padding: const EdgeInsets.all(20),
@@ -572,12 +579,17 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                             Icons.arrow_drop_down,
                             color: Color(0xFF10B982),
                           ),
-                          items: ['Target A'].map((String value) {
-                            return DropdownMenuItem<String>(
-                              value: value,
-                              child: Text(value),
-                            );
-                          }).toList(),
+                          items:
+                              (_inputMethod == 'arrow_values'
+                                      ? ['Default', 'Face Ring 6', 'Ring Puta', 'Face Mega Mendung']
+                                      : ['Face Ring 6', 'Ring Puta', 'Face Mega Mendung'])
+                                  .map((String value) {
+                                    return DropdownMenuItem<String>(
+                                      value: value,
+                                      child: Text(value),
+                                    );
+                                  })
+                                  .toList(),
                           onChanged: (String? newValue) {
                             if (newValue != null) {
                               setState(() {
@@ -600,16 +612,22 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
-                            children: const [
-                              Icon(
+                            children: [
+                              const Icon(
                                 Icons.info_outline,
                                 size: 20,
                                 color: Color(0xFF10B982),
                               ),
-                              SizedBox(width: 8),
+                              const SizedBox(width: 8),
                               Text(
-                                'Scoring Target A',
-                                style: TextStyle(
+                                _selectedTarget == 'Face Ring 6'
+                                    ? 'Scoring Face Ring 6'
+                                    : _selectedTarget == 'Ring Puta'
+                                    ? 'Scoring Ring Puta'
+                                    : _selectedTarget == 'Face Mega Mendung'
+                                    ? 'Scoring Face Mega Mendung'
+                                    : 'Scoring Default',
+                                style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF10B982),
@@ -621,18 +639,67 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: [
-                              _buildScoreChip('X', Colors.yellow[700]!),
-                              _buildScoreChip('9', Colors.yellow[700]!),
-                              _buildScoreChip('8', Colors.red),
-                              _buildScoreChip('7', Colors.red),
-                              _buildScoreChip('6', Colors.blue),
-                              _buildScoreChip('5', Colors.blue),
-                              _buildScoreChip('4', Colors.black),
-                              _buildScoreChip('3', Colors.black),
-                              _buildScoreChip('2', Colors.grey[200]!),
-                              _buildScoreChip('1', Colors.grey[200]!),
-                            ],
+                            children: _selectedTarget == 'Face Ring 6'
+                                ? [
+                                    // Face Ring 6: 6,5,4 (Gold), 3 (Red), 2 (White), 1 (Blue)
+                                    _buildScoreChip(
+                                      '6',
+                                      const Color(0xFFFBBF24),
+                                    ), // Gold
+                                    _buildScoreChip(
+                                      '5',
+                                      const Color(0xFFFBBF24),
+                                    ), // Gold
+                                    _buildScoreChip(
+                                      '4',
+                                      const Color(0xFFFBBF24),
+                                    ), // Gold
+                                    _buildScoreChip(
+                                      '3',
+                                      const Color(0xFFEF4444),
+                                    ), // Red
+                                    _buildScoreChip('2', Colors.white), // White
+                                    _buildScoreChip(
+                                      '1',
+                                      const Color(0xFF3B82F6),
+                                    ), // Blue
+                                  ]
+                                : _selectedTarget == 'Ring Puta'
+                                ? [
+                                    // Ring Puta: 2 (White), 1 (Reddish Brown)
+                                    _buildScoreChip(
+                                      '2',
+                                      Colors.white,
+                                    ), // White
+                                    _buildScoreChip('1', const Color(0xFF7C2D2D)), // Reddish Brown
+                                  ]
+                                : _selectedTarget == 'Face Mega Mendung'
+                                ? [
+                                    // Face Mega Mendung: 10-1 points
+                                    _buildScoreChip('10', const Color(0xFFFBBF24)), // Yellow
+                                    _buildScoreChip('9', const Color(0xFFEF4444)),  // Red
+                                    _buildScoreChip('8', Colors.white),             // White
+                                    _buildScoreChip('7', const Color(0xFF60A5FA)), // Lt Blue
+                                    _buildScoreChip('6', const Color(0xFFFBBF24)), // Yellow
+                                    _buildScoreChip('5', const Color(0xFFEF4444)), // Red
+                                    _buildScoreChip('4', Colors.white),            // White
+                                    _buildScoreChip('3', const Color(0xFF60A5FA)),// Lt Blue
+                                    _buildScoreChip('2', const Color(0xFF1E3A8A)),// Dk Blue
+                                    _buildScoreChip('1', Colors.white),            // White
+                                  ]
+                                : [
+                                    // Default
+                                    _buildScoreChip('X', Colors.yellow[700]!),
+                                    _buildScoreChip('9', Colors.yellow[700]!),
+                                    _buildScoreChip('8', Colors.red),
+                                    _buildScoreChip('7', Colors.red),
+                                    _buildScoreChip('6', Colors.blue),
+                                    _buildScoreChip('5', Colors.blue),
+                                    _buildScoreChip('4', Colors.black),
+                                    _buildScoreChip('3', Colors.black),
+                                    _buildScoreChip('2', Colors.grey[200]!),
+                                    _buildScoreChip('1', Colors.grey[200]!),
+                                  ],
                           ),
                         ],
                       ),
@@ -786,13 +853,22 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
   }
 
   Widget _buildScoreChip(String label, Color color) {
+    // Determine text color based on background color brightness
+    bool isLightBackground = color == Colors.white ||
+        color == Colors.grey[200] ||
+        color == Colors.yellow[700] ||
+        color == const Color(0xFFFBBF24); // Gold color
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: color == Colors.grey[200] ? Colors.grey : color,
+          color: color == Colors.grey[200] ||
+                  color == Colors.white
+              ? Colors.grey
+              : color,
           width: 1,
         ),
       ),
@@ -801,10 +877,164 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
         style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.bold,
-          color: color == Colors.grey[200] || color == Colors.yellow[700]
-              ? Colors.black
-              : Colors.white,
+          color: isLightBackground ? Colors.black : Colors.white,
         ),
+      ),
+    );
+  }
+
+  Widget _buildInputMethodSelector() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF10B982), width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.touch_app, color: Color(0xFF10B982)),
+              const SizedBox(width: 12),
+              const Text(
+                'Metode Input Scoring',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _inputMethod = 'arrow_values';
+                      _selectedTarget = 'Default';
+                    });
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _inputMethod == 'arrow_values'
+                          ? const Color(0xFF10B982)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF10B982),
+                        width: 2,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          child: Icon(
+                            Icons.grid_3x3,
+                            size: 40,
+                            color: _inputMethod == 'arrow_values'
+                                ? Colors.white
+                                : const Color(0xFF10B982),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _inputMethod == 'arrow_values'
+                                ? const Color(0xFF0D9488)
+                                : const Color(0xFFE8F5E9),
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(10),
+                              bottomRight: Radius.circular(10),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Arrow Values',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: _inputMethod == 'arrow_values'
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _inputMethod = 'target_face';
+                      _selectedTarget = 'Ring Puta';
+                    });
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: _inputMethod == 'target_face'
+                          ? const Color(0xFF10B982)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFF10B982),
+                        width: 2,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          child: Icon(
+                            Icons.adjust,
+                            size: 40,
+                            color: _inputMethod == 'target_face'
+                                ? Colors.white
+                                : const Color(0xFF10B982),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: _inputMethod == 'target_face'
+                                ? const Color(0xFF0D9488)
+                                : const Color(0xFFE8F5E9),
+                            borderRadius: const BorderRadius.only(
+                              bottomLeft: Radius.circular(10),
+                              bottomRight: Radius.circular(10),
+                            ),
+                          ),
+                          child: Center(
+                            child: Text(
+                              'Target Face',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: _inputMethod == 'target_face'
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

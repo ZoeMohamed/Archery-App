@@ -13,7 +13,10 @@ class TrainingSession {
   int numberOfRounds;
   int arrowsPerRound;
   String targetType;
+  String inputMethod; // 'arrow_values' or 'target_face'
   Map<String, List<List<String>>> scores; // playerName -> rounds -> arrows
+  Map<String, List<List<Map<String, double>>>>?
+  hitCoordinates; // playerName -> rounds -> arrows -> {x, y}
   String? trainingName; // Nama latihan
 
   TrainingSession({
@@ -25,7 +28,9 @@ class TrainingSession {
     required this.numberOfRounds,
     required this.arrowsPerRound,
     required this.targetType,
+    this.inputMethod = 'arrow_values',
     required this.scores,
+    this.hitCoordinates,
     this.trainingName,
   });
 
@@ -75,12 +80,30 @@ class TrainingSession {
       'numberOfRounds': numberOfRounds,
       'arrowsPerRound': arrowsPerRound,
       'targetType': targetType,
+      'inputMethod': inputMethod,
       'scores': scores,
+      'hitCoordinates': hitCoordinates,
       'trainingName': trainingName,
     };
   }
 
   factory TrainingSession.fromJson(Map<String, dynamic> json) {
+    Map<String, List<List<Map<String, double>>>>? coordinates;
+    if (json['hitCoordinates'] != null) {
+      coordinates = (json['hitCoordinates'] as Map).map(
+        (key, value) => MapEntry(
+          key.toString(),
+          (value as List)
+              .map(
+                (round) => (round as List)
+                    .map((hit) => Map<String, double>.from(hit as Map))
+                    .toList(),
+              )
+              .toList(),
+        ),
+      );
+    }
+
     return TrainingSession(
       id: json['id'],
       supabaseId: json['supabaseId'],
@@ -90,6 +113,7 @@ class TrainingSession {
       numberOfRounds: json['numberOfRounds'],
       arrowsPerRound: json['arrowsPerRound'],
       targetType: json['targetType'],
+      inputMethod: json['inputMethod'] ?? 'arrow_values',
       scores: Map<String, List<List<String>>>.from(
         (json['scores'] as Map).map(
           (key, value) => MapEntry(
@@ -98,6 +122,7 @@ class TrainingSession {
           ),
         ),
       ),
+      hitCoordinates: coordinates,
       trainingName: json['trainingName'],
     );
   }
@@ -112,6 +137,7 @@ class TrainingTemplate {
   int numberOfRounds;
   int arrowsPerRound;
   String targetType;
+  String inputMethod;
 
   TrainingTemplate({
     required this.id,
@@ -121,6 +147,7 @@ class TrainingTemplate {
     required this.numberOfRounds,
     required this.arrowsPerRound,
     required this.targetType,
+    this.inputMethod = 'arrow_values',
   });
 
   Map<String, dynamic> toJson() {
@@ -132,6 +159,7 @@ class TrainingTemplate {
       'numberOfRounds': numberOfRounds,
       'arrowsPerRound': arrowsPerRound,
       'targetType': targetType,
+      'inputMethod': inputMethod,
     };
   }
 
@@ -144,6 +172,7 @@ class TrainingTemplate {
       numberOfRounds: json['numberOfRounds'],
       arrowsPerRound: json['arrowsPerRound'],
       targetType: json['targetType'],
+      inputMethod: json['inputMethod'] ?? 'arrow_values',
     );
   }
 }
@@ -300,10 +329,7 @@ class TrainingData {
     }
   }
 
-  TrainingSession _mergeSession(
-    TrainingSession local,
-    TrainingSession remote,
-  ) {
+  TrainingSession _mergeSession(TrainingSession local, TrainingSession remote) {
     return TrainingSession(
       id: local.id,
       supabaseId: remote.supabaseId ?? local.supabaseId,

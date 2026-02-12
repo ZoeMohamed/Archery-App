@@ -7,17 +7,25 @@ class SummaryTableScreen extends StatelessWidget {
   const SummaryTableScreen({super.key, required this.session});
 
   double _getRoundAverage(String playerName, int roundIndex) {
-    if (session.scores[playerName] == null ||
-        roundIndex >= session.scores[playerName]!.length) {
+    // Check if player has scores
+    if (session.scores[playerName] == null) {
+      return 0;
+    }
+
+    // Check if round index is valid
+    if (roundIndex >= session.scores[playerName]!.length) {
       return 0;
     }
 
     int total = 0;
     int count = 0;
 
-    for (var score in session.scores[playerName]![roundIndex]) {
+    List<String> roundScores = session.scores[playerName]![roundIndex];
+
+    for (var score in roundScores) {
       if (score.isNotEmpty) {
-        total += session.convertScoreToInt(score);
+        int scoreValue = session.convertScoreToInt(score);
+        total += scoreValue;
         count++;
       }
     }
@@ -150,8 +158,13 @@ class SummaryTableScreen extends StatelessWidget {
                   ),
                 ],
                 rows: List.generate(session.numberOfRounds, (roundIndex) {
-                  List<String> roundScores =
-                      session.scores[playerName]?[roundIndex] ?? [];
+                  // Safely get round scores with null checks
+                  List<String> roundScores = [];
+                  if (session.scores[playerName] != null &&
+                      roundIndex < session.scores[playerName]!.length) {
+                    roundScores = session.scores[playerName]![roundIndex];
+                  }
+
                   double roundAvg = _getRoundAverage(playerName, roundIndex);
 
                   return DataRow(
@@ -172,9 +185,10 @@ class SummaryTableScreen extends StatelessWidget {
                       ),
                       // Arrow scores
                       ...List.generate(session.arrowsPerRound, (arrowIndex) {
-                        String score = arrowIndex < roundScores.length
-                            ? roundScores[arrowIndex]
-                            : '';
+                        String score = '';
+                        if (arrowIndex < roundScores.length) {
+                          score = roundScores[arrowIndex];
+                        }
                         return DataCell(
                           Container(
                             width: 50,
@@ -217,6 +231,10 @@ class SummaryTableScreen extends StatelessWidget {
   }
 
   Color _getScoreColor(String score) {
+    if (score.isEmpty) {
+      return Colors.black87;
+    }
+
     switch (score) {
       case 'X':
       case '10':

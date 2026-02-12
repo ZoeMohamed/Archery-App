@@ -155,7 +155,7 @@ class SupabaseTrainingAdapter {
     if (targetType.toLowerCase().contains('animal')) {
       return 'Target Animal';
     }
-    return 'Target A';
+    return 'Default';
   }
 
   static List<String> _resolvePlayerNames(
