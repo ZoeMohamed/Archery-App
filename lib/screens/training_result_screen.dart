@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/training_data.dart';
 import 'summary_table_screen.dart';
-import '../widgets/target_hit_visualization.dart';
 
 class TrainingResultScreen extends StatefulWidget {
   final TrainingSession session;
@@ -72,6 +71,19 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
               );
             },
           ),
+          if (widget.session.numberOfPlayers > 1)
+            IconButton(
+              icon: const Icon(Icons.table_chart, color: Colors.white),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        AverageTableScreen(session: widget.session),
+                  ),
+                );
+              },
+            ),
         ],
         bottom: widget.session.numberOfPlayers > 1
             ? TabBar(
@@ -232,9 +244,6 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
               ...List.generate(widget.session.numberOfRounds, (roundIndex) {
                 return _buildRoundCard(roundIndex, playerName);
               }),
-              // Overall Hit Visualization for Target Face Input
-              if (widget.session.inputMethod == 'target_face')
-                _buildOverallHitVisualization(playerName),
             ],
           ),
         ),
@@ -353,17 +362,14 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
             ],
           ),
           const SizedBox(height: 16),
-          // Score boxes or Target visualization
-          if (widget.session.inputMethod == 'target_face')
-            _buildRoundHitVisualization(roundIndex, playerName)
-          else
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: roundScores.map((score) {
-                return _buildScoreBox(score);
-              }).toList(),
-            ),
+          // Score boxes
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: roundScores.map((score) {
+              return _buildScoreBox(score);
+            }).toList(),
+          ),
           const SizedBox(height: 12),
           Text(
             'Average: ${roundAvg.toStringAsFixed(2)}',
@@ -378,112 +384,31 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
     Color bgColor;
     Color textColor = Colors.white;
 
-    // Different color schemes for different target types
-    if (widget.session.targetType == 'Face Ring 6') {
-      switch (score) {
-        case '6':
-        case '5':
-        case '4':
-          bgColor = const Color(0xFFFBBF24); // Gold
-          textColor = Colors.black;
-          break;
-        case '3':
-          bgColor = const Color(0xFFEF4444); // Red
-          break;
-        case '2':
-          bgColor = Colors.white;
-          textColor = Colors.black;
-          break;
-        case '1':
-          bgColor = const Color(0xFF3B82F6); // Blue
-          break;
-        default: // M
-          bgColor = const Color(0xFF9CA3AF); // Grey
-          break;
-      }
-    } else if (widget.session.targetType == 'Ring Puta') {
-      switch (score) {
-        case '2':
-          bgColor = Colors.white; // White
-          textColor = Colors.black;
-          break;
-        case '1':
-          bgColor = const Color(0xFF7C2D2D); // Reddish Brown
-          break;
-        default: // M
-          bgColor = const Color(0xFF9CA3AF); // Grey
-          break;
-      }
-    } else if (widget.session.targetType == 'Face Mega Mendung') {
-      switch (score) {
-        case '10':
-          bgColor = const Color(0xFFFBBF24); // Yellow
-          textColor = Colors.black;
-          break;
-        case '9':
-          bgColor = const Color(0xFFEF4444); // Red
-          break;
-        case '8':
-          bgColor = Colors.white;
-          textColor = Colors.black;
-          break;
-        case '7':
-          bgColor = const Color(0xFF60A5FA); // Light Blue
-          break;
-        case '6':
-          bgColor = const Color(0xFFFBBF24); // Yellow
-          textColor = Colors.black;
-          break;
-        case '5':
-          bgColor = const Color(0xFFEF4444); // Red
-          break;
-        case '4':
-          bgColor = Colors.white;
-          textColor = Colors.black;
-          break;
-        case '3':
-          bgColor = const Color(0xFF60A5FA); // Light Blue
-          break;
-        case '2':
-          bgColor = const Color(0xFF1E3A8A); // Dark Blue
-          break;
-        case '1':
-          bgColor = Colors.white;
-          textColor = Colors.black;
-          break;
-        default: // M
-          bgColor = const Color(0xFF9CA3AF); // Grey
-          break;
-      }
-    } else {
-      // Default
-      switch (score) {
-        case 'X':
-        case '9':
-          bgColor = const Color(0xFFFBBF24); // Yellow
-          textColor = Colors.black;
-          break;
-        case '8':
-        case '7':
-          bgColor = const Color(0xFFEF4444); // Red
-          break;
-        case '6':
-        case '5':
-          bgColor = const Color(0xFF3B82F6); // Blue
-          break;
-        case '4':
-        case '3':
-          bgColor = const Color(0xFF1F2937); // Black
-          break;
-        case '2':
-        case '1':
-          bgColor = Colors.white;
-          textColor = Colors.black;
-          break;
-        default: // M
-          bgColor = const Color(0xFF9CA3AF); // Grey
-          break;
-      }
+    switch (score) {
+      case 'X':
+      case '9':
+        bgColor = const Color(0xFFFBBF24); // Yellow
+        break;
+      case '8':
+      case '7':
+        bgColor = const Color(0xFFEF4444); // Red
+        break;
+      case '6':
+      case '5':
+        bgColor = const Color(0xFF3B82F6); // Blue
+        break;
+      case '4':
+      case '3':
+        bgColor = const Color(0xFF1F2937); // Black
+        break;
+      case '2':
+      case '1':
+        bgColor = Colors.white;
+        textColor = Colors.black;
+        break;
+      default: // M
+        bgColor = const Color(0xFF9CA3AF); // Grey
+        break;
     }
 
     return Container(
@@ -492,8 +417,7 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
-        border: (bgColor == Colors.white || 
-                 (score == '2' || score == '1' || score == '4' || score == '8'))
+        border: score == '2' || score == '1'
             ? Border.all(color: Colors.grey, width: 2)
             : null,
       ),
@@ -508,126 +432,374 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
       ),
     );
   }
+}
 
-  Widget _buildRoundHitVisualization(int roundIndex, String playerName) {
-    final roundHits =
-        widget.session.hitCoordinates?[playerName]?[roundIndex] ?? [];
-    final roundScores = widget.session.scores[playerName]?[roundIndex] ?? [];
+// Average Table Screen
+class AverageTableScreen extends StatelessWidget {
+  final TrainingSession session;
 
-    return Column(
-      children: [
-        // Target visualization
-        Container(
-          constraints: const BoxConstraints(maxWidth: 300),
-          child: TargetHitVisualization(
-            targetType: widget.session.targetType,
-            hits: roundHits,
-            showLabels: true,
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Score boxes below target
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: WrapAlignment.center,
-          children: roundScores.map((score) {
-            return _buildScoreBox(score);
-          }).toList(),
-        ),
-      ],
-    );
-  }
+  const AverageTableScreen({super.key, required this.session});
 
-  Widget _buildOverallHitVisualization(String playerName) {
-    // Collect all hits from all rounds
-    List<Map<String, double>> allHits = [];
-    int totalScore = 0;
-
-    if (widget.session.hitCoordinates != null &&
-        widget.session.hitCoordinates![playerName] != null) {
-      for (var roundHits in widget.session.hitCoordinates![playerName]!) {
-        allHits.addAll(roundHits);
-      }
-    }
-
-    // Calculate total score
-    if (widget.session.scores[playerName] != null) {
-      for (var round in widget.session.scores[playerName]!) {
+  int _getTotalScore(String playerName) {
+    int total = 0;
+    if (session.scores[playerName] != null) {
+      for (var round in session.scores[playerName]!) {
         for (var score in round) {
-          totalScore += widget.session.convertScoreToInt(score);
+          if (score.isNotEmpty) {
+            total += session.convertScoreToInt(score);
+          }
         }
       }
     }
+    return total;
+  }
 
-    return Container(
-      margin: const EdgeInsets.only(top: 16, bottom: 24),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF10B982), width: 2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+  int _getRoundTotal(String playerName, int roundIndex) {
+    int total = 0;
+    if (session.scores[playerName] != null &&
+        roundIndex < session.scores[playerName]!.length) {
+      for (var score in session.scores[playerName]![roundIndex]) {
+        if (score.isNotEmpty) {
+          total += session.convertScoreToInt(score);
+        }
+      }
+    }
+    return total;
+  }
+
+  double _getAverageScore(String playerName) {
+    int total = _getTotalScore(playerName);
+    int arrowCount = 0;
+    if (session.scores[playerName] != null) {
+      for (var round in session.scores[playerName]!) {
+        for (var score in round) {
+          if (score.isNotEmpty) arrowCount++;
+        }
+      }
+    }
+    if (arrowCount == 0) return 0;
+    return total / arrowCount;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF10B982),
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Average',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
           ),
-        ],
+        ),
+        centerTitle: true,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            // Main Result Table
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  // Table Header
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF10B982),
+                      borderRadius: BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          flex: 2,
+                          child: Text(
+                            'AVG',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                        ...List.generate(session.numberOfRounds, (index) {
+                          return Expanded(
+                            flex: 1,
+                            child: Text(
+                              'R${index + 1}',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          );
+                        }),
+                        const Expanded(
+                          flex: 2,
+                          child: Text(
+                            'Total Score',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Table Rows for each player
+                  ...session.playerNames.map((playerName) {
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Colors.grey[200]!,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              playerName,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          ...List.generate(session.numberOfRounds, (
+                            roundIndex,
+                          ) {
+                            int roundTotal = _getRoundTotal(
+                              playerName,
+                              roundIndex,
+                            );
+                            return Expanded(
+                              flex: 1,
+                              child: Text(
+                                roundTotal > 0 ? '$roundTotal' : '-',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.black87,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            );
+                          }),
+                          Expanded(
+                            flex: 2,
+                            child: GestureDetector(
+                              onTap: () {
+                                _showPlayerDetailDialog(context, playerName);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B982),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'View Detail',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showPlayerDetailDialog(BuildContext context, String playerName) {
+    int totalScore = _getTotalScore(playerName);
+    double avgScore = _getAverageScore(playerName);
+
+    // Calculate accuracy
+    int hitCount = 0;
+    int totalArrows = 0;
+    if (session.scores[playerName] != null) {
+      for (var round in session.scores[playerName]!) {
+        for (var score in round) {
+          if (score.isNotEmpty) {
+            totalArrows++;
+            if (score != 'M') hitCount++;
+          }
+        }
+      }
+    }
+    double accuracy = totalArrows > 0 ? (hitCount / totalArrows) * 100 : 0;
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF1FAF5),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Total Keseluruhan',
-                style: TextStyle(
-                  fontSize: 18,
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFBBF24),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.emoji_events,
+                  size: 36,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                playerName,
+                style: const TextStyle(
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatColumn(
+                    label: 'Total Score',
+                    value: '$totalScore',
+                    icon: Icons.star,
+                    color: const Color(0xFFFBBF24),
+                  ),
+                  _buildStatColumn(
+                    label: 'Average',
+                    value: avgScore.toStringAsFixed(2),
+                    icon: Icons.trending_up,
+                    color: const Color(0xFF3B82F6),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildStatColumn(
+                    label: 'Accuracy',
+                    value: '${accuracy.toStringAsFixed(1)}%',
+                    icon: Icons.adjust,
+                    color: const Color(0xFF10B982),
+                  ),
+                  _buildStatColumn(
+                    label: 'Arrows',
+                    value: '$totalArrows',
+                    icon: Icons.arrow_forward,
+                    color: const Color(0xFFEF4444),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF10B982),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFD1FAE5),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  'Total: $totalScore',
-                  style: const TextStyle(
-                    fontSize: 14,
+                child: const Text(
+                  'Close',
+                  style: TextStyle(
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF10B982),
+                    color: Colors.white,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 350),
-              child: TargetHitVisualization(
-                targetType: widget.session.targetType,
-                hits: allHits,
-                showLabels: false,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Menampilkan ${allHits.where((h) => h['x'] != 0.0 || h['y'] != 0.0).length} hit dari total ${widget.session.numberOfRounds * widget.session.arrowsPerRound} arrow',
-            style: const TextStyle(fontSize: 13, color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildStatColumn({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, size: 24, color: color),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+      ],
     );
   }
 }

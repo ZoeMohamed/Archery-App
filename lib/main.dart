@@ -51,6 +51,43 @@ class MainApp extends StatelessWidget {
         primarySwatch: Colors.green,
         primaryColor: const Color(0xFF10B982),
         fontFamily: 'Roboto',
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF10B982),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: const Color(0xFFF1FAF5),
+          surfaceTintColor: const Color(0xFFF1FAF5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          titleTextStyle: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+          contentTextStyle: const TextStyle(
+            fontSize: 14,
+            color: Colors.black87,
+          ),
+        ),
+        popupMenuTheme: PopupMenuThemeData(
+          color: const Color(0xFFF1FAF5),
+          surfaceTintColor: const Color(0xFFF1FAF5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          textStyle: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+          elevation: 8,
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF10B982),
+          ),
+        ),
       ),
       home: kDebugMode && _debugAutoLoginEnabled
           ? const _DebugAutoLoginGate()
