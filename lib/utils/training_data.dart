@@ -339,7 +339,9 @@ class TrainingData {
       numberOfRounds: remote.numberOfRounds,
       arrowsPerRound: remote.arrowsPerRound,
       targetType: remote.targetType,
+      inputMethod: remote.inputMethod,
       scores: remote.scores,
+      hitCoordinates: remote.hitCoordinates,
       trainingName: remote.trainingName ?? local.trainingName,
     );
   }

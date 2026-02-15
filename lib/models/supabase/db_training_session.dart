@@ -5,11 +5,7 @@ class DbGroupMember {
   final String name;
   final String? initials;
 
-  const DbGroupMember({
-    this.userId,
-    required this.name,
-    this.initials,
-  });
+  const DbGroupMember({this.userId, required this.name, this.initials});
 
   factory DbGroupMember.fromJson(Map<String, dynamic> json) {
     return DbGroupMember(
@@ -20,11 +16,7 @@ class DbGroupMember {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'user_id': userId,
-      'name': name,
-      'initials': initials,
-    };
+    return {'user_id': userId, 'name': name, 'initials': initials};
   }
 }
 
@@ -34,6 +26,7 @@ class DbTrainingSession {
   final DateTime trainingDate;
   final String mode;
   final String targetType;
+  final String inputMethod;
   final String? distance;
   final String? trainingName;
   final int? numberOfPlayers;
@@ -52,6 +45,7 @@ class DbTrainingSession {
     required this.trainingDate,
     required this.mode,
     required this.targetType,
+    this.inputMethod = 'arrow_values',
     this.distance,
     this.trainingName,
     this.numberOfPlayers,
@@ -74,6 +68,7 @@ class DbTrainingSession {
           DbHelpers.parseDate(json['training_date']) ?? DateTime.now(),
       mode: json['mode']?.toString() ?? 'individual',
       targetType: json['target_type']?.toString() ?? 'bullet',
+      inputMethod: json['input_method']?.toString() ?? 'arrow_values',
       distance: json['distance']?.toString(),
       trainingName: json['training_name']?.toString(),
       numberOfPlayers: (json['number_of_players'] as num?)?.toInt(),
@@ -98,6 +93,7 @@ class DbTrainingSession {
       'training_date': DbHelpers.formatDate(trainingDate),
       'mode': mode,
       'target_type': targetType,
+      'input_method': inputMethod,
       'distance': distance,
       'training_name': trainingName,
       'number_of_players': numberOfPlayers,

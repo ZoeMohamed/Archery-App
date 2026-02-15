@@ -8,7 +8,7 @@ import '../utils/training_data.dart';
 
 class SupabaseTrainingService {
   SupabaseTrainingService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -28,11 +28,7 @@ class SupabaseTrainingService {
     );
     final payload = _cleanPayload(dbSession.toJson());
 
-    final inserted = await _client
-        .from('training_sessions')
-        .insert(payload)
-        .select()
-        .single();
+    final inserted = await _insertTrainingSessionWithFallback(payload);
     final savedSession = DbTrainingSession.fromJson(
       Map<String, dynamic>.from(inserted),
     );
@@ -46,7 +42,7 @@ class SupabaseTrainingService {
       final detailPayload = details
           .map((detail) => _cleanPayload(detail.toJson()))
           .toList();
-      await _client.from('score_details').insert(detailPayload);
+      await _insertScoreDetailsWithFallback(detailPayload);
     }
 
     return savedSession.id ?? '';
@@ -65,9 +61,10 @@ class SupabaseTrainingService {
         .order('training_date', ascending: false);
 
     final dbSessions = (sessionRows as List)
-        .map((row) => DbTrainingSession.fromJson(
-              Map<String, dynamic>.from(row as Map),
-            ))
+        .map(
+          (row) =>
+              DbTrainingSession.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
         .toList();
 
     if (dbSessions.isEmpty) {
@@ -150,5 +147,72 @@ class SupabaseTrainingService {
     cleaned.remove('created_at');
     cleaned.remove('updated_at');
     return cleaned;
+  }
+
+  Future<Map<String, dynamic>> _insertTrainingSessionWithFallback(
+    Map<String, dynamic> originalPayload,
+  ) async {
+    final payload = Map<String, dynamic>.from(originalPayload);
+    final removedColumns = <String>{};
+
+    while (true) {
+      try {
+        final inserted = await _client
+            .from('training_sessions')
+            .insert(payload)
+            .select()
+            .single();
+        return Map<String, dynamic>.from(inserted);
+      } catch (error) {
+        final missing = _extractMissingColumn(
+          error,
+          table: 'training_sessions',
+        );
+        if (missing == null || removedColumns.contains(missing)) {
+          rethrow;
+        }
+        payload.remove(missing);
+        removedColumns.add(missing);
+        debugPrint(
+          'training_sessions missing column "$missing", retrying without it.',
+        );
+      }
+    }
+  }
+
+  Future<void> _insertScoreDetailsWithFallback(
+    List<Map<String, dynamic>> originalPayload,
+  ) async {
+    var payload = originalPayload
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    final removedColumns = <String>{};
+
+    while (true) {
+      try {
+        await _client.from('score_details').insert(payload);
+        return;
+      } catch (error) {
+        final missing = _extractMissingColumn(error, table: 'score_details');
+        if (missing == null || removedColumns.contains(missing)) {
+          rethrow;
+        }
+        payload = payload.map((row) {
+          row.remove(missing);
+          return row;
+        }).toList();
+        removedColumns.add(missing);
+        debugPrint(
+          'score_details missing column "$missing", retrying without it.',
+        );
+      }
+    }
+  }
+
+  String? _extractMissingColumn(Object error, {required String table}) {
+    final text = error.toString();
+    final pattern = RegExp("Could not find the '([^']+)' column of '$table'");
+    final match = pattern.firstMatch(text);
+    return match?.group(1);
   }
 }

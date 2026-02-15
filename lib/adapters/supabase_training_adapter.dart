@@ -13,13 +13,11 @@ class SupabaseTrainingAdapter {
     final mode = isGroup ? 'group' : 'individual';
     final groupMembers = isGroup
         ? local.playerNames
-            .map(
-              (name) => DbGroupMember(
-                name: name,
-                initials: _initialsForName(name),
-              ),
-            )
-            .toList()
+              .map(
+                (name) =>
+                    DbGroupMember(name: name, initials: _initialsForName(name)),
+              )
+              .toList()
         : null;
 
     return DbTrainingSession(
@@ -27,6 +25,7 @@ class SupabaseTrainingAdapter {
       trainingDate: local.date,
       mode: mode,
       targetType: _mapTargetType(local.targetType),
+      inputMethod: local.inputMethod,
       distance: distance,
       trainingName: local.trainingName,
       numberOfPlayers: local.numberOfPlayers,
@@ -55,8 +54,13 @@ class SupabaseTrainingAdapter {
           }
           final playerUserId =
               playerIds?[playerName] ?? _defaultPlayerId(local, defaultUserId);
-          final playerLabel =
-              playerUserId == null ? playerName : null;
+          final playerLabel = playerUserId == null ? playerName : null;
+          final hit = _extractHitCoordinate(
+            local,
+            playerName: playerName,
+            roundIndex: roundIndex,
+            arrowIndex: arrowIndex,
+          );
           details.add(
             DbScoreDetail(
               sessionId: sessionId,
@@ -66,6 +70,8 @@ class SupabaseTrainingAdapter {
               playerName: playerLabel,
               scoreValue: scoreValue,
               scoreNumeric: local.convertScoreToInt(scoreValue),
+              hitX: hit?['x'],
+              hitY: hit?['y'],
             ),
           );
         }
@@ -122,8 +128,16 @@ class SupabaseTrainingAdapter {
       scores[playerName]![roundIndex][arrowIndex] = detail.scoreValue;
     }
 
-    final numberOfPlayers =
-        dbSession.numberOfPlayers ?? resolvedNames.length;
+    final numberOfPlayers = dbSession.numberOfPlayers ?? resolvedNames.length;
+    final restoredCoordinates = _restoreHitCoordinates(
+      dbSession: dbSession,
+      details: details,
+      playerNames: resolvedNames,
+      scores: scores,
+      userIdToName: userIdToName,
+      totalEnds: totalEnds,
+      arrowsPerEnd: arrowsPerEnd,
+    );
 
     return TrainingSession(
       id: dbSession.id ?? '',
@@ -138,7 +152,9 @@ class SupabaseTrainingAdapter {
       numberOfRounds: totalEnds,
       arrowsPerRound: arrowsPerEnd,
       targetType: _mapTargetTypeToLocal(dbSession.targetType),
+      inputMethod: dbSession.inputMethod,
       scores: scores,
+      hitCoordinates: restoredCoordinates,
       trainingName: _normalizeTrainingName(dbSession),
     );
   }
@@ -236,9 +252,94 @@ class SupabaseTrainingAdapter {
 
   static String _initialsForName(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
-    final letters = parts.where((part) => part.isNotEmpty).take(2).map(
-          (part) => part[0].toUpperCase(),
-        );
+    final letters = parts
+        .where((part) => part.isNotEmpty)
+        .take(2)
+        .map((part) => part[0].toUpperCase());
     return letters.join();
+  }
+
+  static Map<String, double>? _extractHitCoordinate(
+    TrainingSession session, {
+    required String playerName,
+    required int roundIndex,
+    required int arrowIndex,
+  }) {
+    final playerRounds = session.hitCoordinates?[playerName];
+    if (playerRounds == null || roundIndex >= playerRounds.length) {
+      return null;
+    }
+    final roundHits = playerRounds[roundIndex];
+    if (arrowIndex >= roundHits.length) {
+      return null;
+    }
+    final hit = roundHits[arrowIndex];
+    final x = hit['x'];
+    final y = hit['y'];
+    if (x == null || y == null) {
+      return null;
+    }
+    return {'x': x, 'y': y};
+  }
+
+  static Map<String, List<List<Map<String, double>>>>? _restoreHitCoordinates({
+    required DbTrainingSession dbSession,
+    required List<DbScoreDetail> details,
+    required List<String> playerNames,
+    required Map<String, List<List<String>>> scores,
+    required Map<String, String> userIdToName,
+    required int totalEnds,
+    required int arrowsPerEnd,
+  }) {
+    final shouldIncludeCoordinates =
+        dbSession.inputMethod == 'target_face' ||
+        details.any((detail) => detail.hitX != null && detail.hitY != null);
+    if (!shouldIncludeCoordinates) {
+      return null;
+    }
+
+    final coordinates = <String, List<List<Map<String, double>>>>{};
+    for (final name in playerNames) {
+      coordinates[name] = List.generate(
+        totalEnds,
+        (_) => List.generate(arrowsPerEnd, (_) => {'x': 0.0, 'y': 0.0}),
+      );
+    }
+
+    for (final detail in details) {
+      final hitX = detail.hitX;
+      final hitY = detail.hitY;
+      if (hitX == null || hitY == null) {
+        continue;
+      }
+      final playerName = _resolveDetailPlayerName(
+        detail,
+        playerNames,
+        userIdToName,
+      );
+      if (!coordinates.containsKey(playerName)) {
+        coordinates[playerName] = List.generate(
+          totalEnds,
+          (_) => List.generate(arrowsPerEnd, (_) => {'x': 0.0, 'y': 0.0}),
+        );
+        if (!scores.containsKey(playerName)) {
+          scores[playerName] = List.generate(
+            totalEnds,
+            (_) => List.filled(arrowsPerEnd, 'M'),
+          );
+        }
+      }
+      final roundIndex = detail.endNumber - 1;
+      final arrowIndex = detail.arrowNumber - 1;
+      if (roundIndex < 0 ||
+          roundIndex >= totalEnds ||
+          arrowIndex < 0 ||
+          arrowIndex >= arrowsPerEnd) {
+        continue;
+      }
+      coordinates[playerName]![roundIndex][arrowIndex] = {'x': hitX, 'y': hitY};
+    }
+
+    return coordinates;
   }
 }

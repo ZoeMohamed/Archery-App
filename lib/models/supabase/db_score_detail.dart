@@ -9,6 +9,8 @@ class DbScoreDetail {
   final String? playerName;
   final String scoreValue;
   final int scoreNumeric;
+  final double? hitX;
+  final double? hitY;
   final DateTime? createdAt;
 
   const DbScoreDetail({
@@ -20,6 +22,8 @@ class DbScoreDetail {
     this.playerName,
     required this.scoreValue,
     required this.scoreNumeric,
+    this.hitX,
+    this.hitY,
     this.createdAt,
   });
 
@@ -33,6 +37,8 @@ class DbScoreDetail {
       playerName: json['player_name']?.toString(),
       scoreValue: json['score_value']?.toString() ?? '',
       scoreNumeric: (json['score_numeric'] as num?)?.toInt() ?? 0,
+      hitX: (json['hit_x'] as num?)?.toDouble(),
+      hitY: (json['hit_y'] as num?)?.toDouble(),
       createdAt: DbHelpers.parseTimestamp(json['created_at']),
     );
   }
@@ -47,6 +53,8 @@ class DbScoreDetail {
       'player_name': playerName,
       'score_value': scoreValue,
       'score_numeric': scoreNumeric,
+      'hit_x': hitX,
+      'hit_y': hitY,
       'created_at': DbHelpers.formatTimestamp(createdAt),
     };
   }
