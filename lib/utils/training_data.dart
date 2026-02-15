@@ -338,12 +338,26 @@ class TrainingData {
       playerNames: remote.playerNames,
       numberOfRounds: remote.numberOfRounds,
       arrowsPerRound: remote.arrowsPerRound,
-      targetType: remote.targetType,
+      targetType: _mergeTargetType(local.targetType, remote.targetType),
       inputMethod: remote.inputMethod,
       scores: remote.scores,
       hitCoordinates: remote.hitCoordinates,
       trainingName: remote.trainingName ?? local.trainingName,
     );
+  }
+
+  String _mergeTargetType(String localType, String remoteType) {
+    final localNormalized = localType.trim().toLowerCase();
+    final remoteNormalized = remoteType.trim().toLowerCase();
+    final remoteGeneric =
+        remoteNormalized.isEmpty || remoteNormalized == 'default';
+    final localSpecific =
+        localNormalized.isNotEmpty && localNormalized != 'default';
+
+    if (remoteGeneric && localSpecific) {
+      return localType;
+    }
+    return remoteType;
   }
 
   String _buildSignature(TrainingSession session) {

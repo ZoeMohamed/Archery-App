@@ -76,11 +76,12 @@ void main() {
 
       final sessionRow = await client
           .from('training_sessions')
-          .select('id,input_method,training_name')
+          .select('id,input_method,target_face_type,training_name')
           .eq('id', sessionId)
           .single();
       final sessionData = Map<String, dynamic>.from(sessionRow);
       expect(sessionData['input_method'], 'target_face');
+      expect(sessionData['target_face_type'], 'Face Ring 6');
 
       final detailRows = await client
           .from('score_details')

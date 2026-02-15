@@ -1,6 +1,7 @@
 import '../models/supabase/db_score_detail.dart';
 import '../models/supabase/db_training_session.dart';
 import '../utils/training_data.dart';
+import 'dart:math' as math;
 
 class SupabaseTrainingAdapter {
   static DbTrainingSession toDbSession(
@@ -25,6 +26,7 @@ class SupabaseTrainingAdapter {
       trainingDate: local.date,
       mode: mode,
       targetType: _mapTargetType(local.targetType),
+      targetFaceType: local.targetType,
       inputMethod: local.inputMethod,
       distance: distance,
       trainingName: local.trainingName,
@@ -151,7 +153,7 @@ class SupabaseTrainingAdapter {
       playerNames: resolvedNames,
       numberOfRounds: totalEnds,
       arrowsPerRound: arrowsPerEnd,
-      targetType: _mapTargetTypeToLocal(dbSession.targetType),
+      targetType: _resolveLocalTargetType(dbSession, details),
       inputMethod: dbSession.inputMethod,
       scores: scores,
       hitCoordinates: restoredCoordinates,
@@ -167,11 +169,170 @@ class SupabaseTrainingAdapter {
     return 'bullet';
   }
 
-  static String _mapTargetTypeToLocal(String targetType) {
-    if (targetType.toLowerCase().contains('animal')) {
+  static String _resolveLocalTargetType(
+    DbTrainingSession dbSession,
+    List<DbScoreDetail> details,
+  ) {
+    final storedTarget = dbSession.targetFaceType?.trim();
+    if (storedTarget != null && storedTarget.isNotEmpty) {
+      return storedTarget;
+    }
+
+    if (dbSession.targetType.toLowerCase().contains('animal')) {
       return 'Target Animal';
     }
-    return 'Default';
+
+    if (dbSession.inputMethod != 'target_face') {
+      return 'Default';
+    }
+
+    final inferredFromHits = _inferTargetTypeFromHitCoordinates(details);
+    if (inferredFromHits != null) {
+      return inferredFromHits;
+    }
+
+    int maxScore = 0;
+    for (final detail in details) {
+      if (detail.scoreNumeric > maxScore) {
+        maxScore = detail.scoreNumeric;
+      }
+    }
+    if (maxScore >= 7) {
+      return 'Face Mega Mendung';
+    }
+    if (maxScore > 0 && maxScore <= 2) {
+      return 'Ring Puta';
+    }
+    return 'Face Ring 6';
+  }
+
+  static String? _inferTargetTypeFromHitCoordinates(
+    List<DbScoreDetail> details,
+  ) {
+    final candidateTypes = ['Face Ring 6', 'Ring Puta', 'Face Mega Mendung'];
+    final scoredDetails = details
+        .where((detail) => detail.hitX != null && detail.hitY != null)
+        .toList();
+    if (scoredDetails.isEmpty) {
+      return null;
+    }
+
+    String? bestType;
+    int bestMatches = -1;
+    int bestMismatches = 1 << 30;
+
+    for (final type in candidateTypes) {
+      int matches = 0;
+      int mismatches = 0;
+      for (final detail in scoredDetails) {
+        final predicted = _predictScore(
+          targetType: type,
+          x: detail.hitX ?? 0.0,
+          y: detail.hitY ?? 0.0,
+        );
+        if (predicted == detail.scoreNumeric) {
+          matches++;
+        } else {
+          mismatches++;
+        }
+      }
+
+      if (matches > bestMatches ||
+          (matches == bestMatches && mismatches < bestMismatches)) {
+        bestType = type;
+        bestMatches = matches;
+        bestMismatches = mismatches;
+      }
+    }
+
+    if (bestType == null || bestMatches <= 0) {
+      return null;
+    }
+    return bestType;
+  }
+
+  static int _predictScore({
+    required String targetType,
+    required double x,
+    required double y,
+  }) {
+    final distance = math.sqrt((x * x) + (y * y));
+    if (targetType == 'Face Ring 6') {
+      if (distance <= 0.167) return 6;
+      if (distance <= 0.334) return 5;
+      if (distance <= 0.501) return 4;
+      if (distance <= 0.668) return 3;
+      if (distance <= 0.835) return 2;
+      if (distance <= 1.0) return 1;
+      return 0;
+    }
+
+    if (targetType == 'Ring Puta') {
+      if (distance <= 0.4) return 2;
+      if (distance <= 1.0) return 1;
+      return 0;
+    }
+
+    return _predictMegaMendungScore(x, y);
+  }
+
+  static int _predictMegaMendungScore(double x, double y) {
+    final upper = _checkPrismaAtas(x, y);
+    if (upper > 0) {
+      return upper;
+    }
+    final lower = _checkPrismaBawah(x, y);
+    if (lower > 0) {
+      return lower;
+    }
+    final distance = math.sqrt((x * x) + (y * y));
+    if (distance <= 1.0) {
+      return 1;
+    }
+    return 0;
+  }
+
+  static int _checkPrismaAtas(double x, double y) {
+    final dy = y + 0.35;
+    final dx = x;
+    final distFromCenter = math.sqrt((dx * dx) + (dy * dy));
+    if (distFromCenter <= 0.11) {
+      return 10;
+    }
+    final dist = dx.abs() + dy.abs();
+    if (dist <= 0.25) {
+      return 9;
+    }
+    if (dist <= 0.35) {
+      return 8;
+    }
+    if (dist <= 0.45) {
+      return 7;
+    }
+    return 0;
+  }
+
+  static int _checkPrismaBawah(double x, double y) {
+    final dy = y - 0.3;
+    final dx = x;
+    final distFromCenter = math.sqrt((dx * dx) + (dy * dy));
+    if (distFromCenter <= 0.14) {
+      return 6;
+    }
+    final dist = dx.abs() + dy.abs();
+    if (dist <= 0.33) {
+      return 5;
+    }
+    if (dist <= 0.45) {
+      return 4;
+    }
+    if (dist <= 0.55) {
+      return 3;
+    }
+    if (dist <= 0.65) {
+      return 2;
+    }
+    return 0;
   }
 
   static List<String> _resolvePlayerNames(

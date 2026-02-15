@@ -179,7 +179,7 @@ Future<String> _insertTrainingSession({
 }) async {
   final today = DateTime.now().toIso8601String().split('T').first;
   final uri = Uri.parse(
-    '$baseUrl/rest/v1/training_sessions?select=id,input_method,training_name,number_of_players',
+    '$baseUrl/rest/v1/training_sessions?select=id,input_method,target_face_type,training_name,number_of_players',
   );
 
   final payload = {
@@ -188,6 +188,7 @@ Future<String> _insertTrainingSession({
     'mode': 'individual',
     'target_type': 'bullet',
     'input_method': 'target_face',
+    'target_face_type': 'Face Ring 6',
     'training_name': 'VERIFY_TARGET_FACE_$marker',
     'number_of_players': 1,
     'total_ends': 1,
@@ -217,6 +218,11 @@ Future<String> _insertTrainingSession({
   if (row['input_method']?.toString() != 'target_face') {
     throw Exception(
       'training_sessions.input_method mismatch: ${row['input_method']}',
+    );
+  }
+  if (row['target_face_type']?.toString() != 'Face Ring 6') {
+    throw Exception(
+      'training_sessions.target_face_type mismatch: ${row['target_face_type']}',
     );
   }
   final sessionId = row['id']?.toString();

@@ -9,7 +9,8 @@ BEGIN;
 ALTER TABLE public.training_sessions
   ADD COLUMN IF NOT EXISTS training_name VARCHAR(255),
   ADD COLUMN IF NOT EXISTS number_of_players INTEGER,
-  ADD COLUMN IF NOT EXISTS input_method VARCHAR(20);
+  ADD COLUMN IF NOT EXISTS input_method VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS target_face_type VARCHAR(50);
 
 UPDATE public.training_sessions
 SET number_of_players = CASE
@@ -23,6 +24,9 @@ WHERE number_of_players IS NULL;
 UPDATE public.training_sessions
 SET input_method = 'arrow_values'
 WHERE input_method IS NULL OR btrim(input_method) = '';
+
+-- Do not hard-backfill target_face_type for legacy rows.
+-- Legacy rows are inferred in app from hit coordinates to avoid wrong assumptions.
 
 ALTER TABLE public.training_sessions
   ALTER COLUMN number_of_players SET DEFAULT 1,
@@ -57,6 +61,29 @@ BEGIN
     ALTER TABLE public.training_sessions
       ADD CONSTRAINT training_sessions_number_of_players_check
       CHECK (number_of_players > 0);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    JOIN pg_namespace n ON n.oid = t.relnamespace
+    WHERE n.nspname = 'public'
+      AND t.relname = 'training_sessions'
+      AND c.conname = 'training_sessions_target_face_type_check'
+  ) THEN
+    ALTER TABLE public.training_sessions
+      ADD CONSTRAINT training_sessions_target_face_type_check
+      CHECK (
+        target_face_type IS NULL OR
+        target_face_type IN (
+          'Default',
+          'Face Ring 6',
+          'Ring Puta',
+          'Face Mega Mendung',
+          'Target Animal'
+        )
+      );
   END IF;
 END $$;
 

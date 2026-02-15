@@ -26,6 +26,7 @@ class DbTrainingSession {
   final DateTime trainingDate;
   final String mode;
   final String targetType;
+  final String? targetFaceType;
   final String inputMethod;
   final String? distance;
   final String? trainingName;
@@ -45,6 +46,7 @@ class DbTrainingSession {
     required this.trainingDate,
     required this.mode,
     required this.targetType,
+    this.targetFaceType,
     this.inputMethod = 'arrow_values',
     this.distance,
     this.trainingName,
@@ -68,6 +70,7 @@ class DbTrainingSession {
           DbHelpers.parseDate(json['training_date']) ?? DateTime.now(),
       mode: json['mode']?.toString() ?? 'individual',
       targetType: json['target_type']?.toString() ?? 'bullet',
+      targetFaceType: json['target_face_type']?.toString(),
       inputMethod: json['input_method']?.toString() ?? 'arrow_values',
       distance: json['distance']?.toString(),
       trainingName: json['training_name']?.toString(),
@@ -93,6 +96,7 @@ class DbTrainingSession {
       'training_date': DbHelpers.formatDate(trainingDate),
       'mode': mode,
       'target_type': targetType,
+      'target_face_type': targetFaceType,
       'input_method': inputMethod,
       'distance': distance,
       'training_name': trainingName,

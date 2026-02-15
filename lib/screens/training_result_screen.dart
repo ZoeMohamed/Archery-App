@@ -1,7 +1,10 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/training_data.dart';
 import 'summary_table_screen.dart';
+import '../widgets/target_face_input.dart';
 
 class TrainingResultScreen extends StatefulWidget {
   final TrainingSession session;
@@ -265,7 +268,7 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -321,7 +324,7 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -370,6 +373,14 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
               return _buildScoreBox(score);
             }).toList(),
           ),
+          if (widget.session.inputMethod == 'target_face') ...[
+            const SizedBox(height: 16),
+            _buildTargetHitSection(
+              playerName: playerName,
+              roundIndex: roundIndex,
+              roundScores: roundScores,
+            ),
+          ],
           const SizedBox(height: 12),
           Text(
             'Average: ${roundAvg.toStringAsFixed(2)}',
@@ -386,8 +397,10 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
 
     switch (score) {
       case 'X':
+      case '10':
       case '9':
         bgColor = const Color(0xFFFBBF24); // Yellow
+        textColor = Colors.black;
         break;
       case '8':
       case '7':
@@ -432,6 +445,327 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
       ),
     );
   }
+
+  Widget _buildTargetHitSection({
+    required String playerName,
+    required int roundIndex,
+    required List<String> roundScores,
+  }) {
+    final visualTargetType = _resolveVisualTargetType(
+      widget.session.targetType,
+    );
+    final roundHits = _getRoundHits(
+      playerName: playerName,
+      roundIndex: roundIndex,
+      arrowCount: roundScores.length,
+    );
+    final hitPoints = _getRecordedHitPoints(roundScores, roundHits);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Visual Target',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            visualTargetType,
+            style: const TextStyle(fontSize: 13, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          _buildTargetPreview(hitPoints, targetType: visualTargetType),
+          const SizedBox(height: 12),
+          const Text(
+            'Detail Panah Yang Kena Target',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (hitPoints.isEmpty)
+            const Text(
+              'Belum ada panah yang kena target pada rambahan ini.',
+              style: TextStyle(fontSize: 13, color: Colors.grey),
+            )
+          else
+            Column(children: hitPoints.map(_buildHitDetailRow).toList()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTargetPreview(
+    List<_RoundHitPoint> hitPoints, {
+    required String targetType,
+  }) {
+    const double targetSize = 220;
+    const double markerSize = 24;
+
+    return Center(
+      child: Container(
+        width: targetSize + 20,
+        height: targetSize + 20,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: SizedBox(
+          width: targetSize,
+          height: targetSize,
+          child: Stack(
+            children: [
+              CustomPaint(
+                size: const Size(targetSize, targetSize),
+                painter: TargetFacePainter(
+                  targetType: targetType,
+                  hits: const [],
+                ),
+              ),
+              ...hitPoints.map((point) {
+                final radius = targetSize / 2;
+                final center = targetSize / 2;
+                final left = center + (point.x * radius) - (markerSize / 2);
+                final top = center + (point.y * radius) - (markerSize / 2);
+
+                return Positioned(
+                  left: left,
+                  top: top,
+                  child: Container(
+                    width: markerSize,
+                    height: markerSize,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      '${point.arrowNumber}',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHitDetailRow(_RoundHitPoint point) {
+    final distancePercent =
+        (math.sqrt((point.x * point.x) + (point.y * point.y)) * 100)
+            .toStringAsFixed(1);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            'Panah ${point.arrowNumber}',
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(width: 8),
+          _buildMiniScoreBadge(point.score),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'x ${point.x.toStringAsFixed(2)} • y ${point.y.toStringAsFixed(2)} • r $distancePercent%',
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMiniScoreBadge(String score) {
+    final style = _getScoreStyle(score);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: style.background,
+        borderRadius: BorderRadius.circular(8),
+        border: style.hasBorder
+            ? Border.all(color: Colors.grey, width: 1.5)
+            : null,
+      ),
+      child: Text(
+        score,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: style.text,
+        ),
+      ),
+    );
+  }
+
+  List<Map<String, double>> _getRoundHits({
+    required String playerName,
+    required int roundIndex,
+    required int arrowCount,
+  }) {
+    final playerRounds = widget.session.hitCoordinates?[playerName];
+    final roundData = (playerRounds != null && roundIndex < playerRounds.length)
+        ? playerRounds[roundIndex]
+        : null;
+
+    return List.generate(arrowCount, (index) {
+      if (roundData != null && index < roundData.length) {
+        final rawHit = roundData[index];
+        final x = (rawHit['x'] as num?)?.toDouble() ?? 0.0;
+        final y = (rawHit['y'] as num?)?.toDouble() ?? 0.0;
+        return {'x': x, 'y': y};
+      }
+      return {'x': 0.0, 'y': 0.0};
+    });
+  }
+
+  List<_RoundHitPoint> _getRecordedHitPoints(
+    List<String> roundScores,
+    List<Map<String, double>> roundHits,
+  ) {
+    final points = <_RoundHitPoint>[];
+    for (var i = 0; i < roundScores.length; i++) {
+      final score = roundScores[i];
+      if (score.isEmpty || widget.session.convertScoreToInt(score) <= 0) {
+        continue;
+      }
+      final hit = i < roundHits.length
+          ? roundHits[i]
+          : const {'x': 0.0, 'y': 0.0};
+      points.add(
+        _RoundHitPoint(
+          arrowNumber: i + 1,
+          score: score,
+          x: hit['x'] ?? 0.0,
+          y: hit['y'] ?? 0.0,
+        ),
+      );
+    }
+    return points;
+  }
+
+  _ScoreStyle _getScoreStyle(String score) {
+    switch (score) {
+      case 'X':
+      case '10':
+      case '9':
+        return const _ScoreStyle(
+          background: Color(0xFFFBBF24),
+          text: Colors.black,
+          hasBorder: false,
+        );
+      case '8':
+      case '7':
+        return const _ScoreStyle(
+          background: Color(0xFFEF4444),
+          text: Colors.white,
+          hasBorder: false,
+        );
+      case '6':
+      case '5':
+        return const _ScoreStyle(
+          background: Color(0xFF3B82F6),
+          text: Colors.white,
+          hasBorder: false,
+        );
+      case '4':
+      case '3':
+        return const _ScoreStyle(
+          background: Color(0xFF1F2937),
+          text: Colors.white,
+          hasBorder: false,
+        );
+      case '2':
+      case '1':
+        return const _ScoreStyle(
+          background: Colors.white,
+          text: Colors.black,
+          hasBorder: true,
+        );
+      default:
+        return const _ScoreStyle(
+          background: Color(0xFF9CA3AF),
+          text: Colors.white,
+          hasBorder: false,
+        );
+    }
+  }
+
+  String _resolveVisualTargetType(String targetType) {
+    final normalized = targetType.trim().toLowerCase();
+    if (normalized.isEmpty || normalized == 'default') {
+      return 'Face Ring 6';
+    }
+    return targetType;
+  }
+}
+
+class _RoundHitPoint {
+  final int arrowNumber;
+  final String score;
+  final double x;
+  final double y;
+
+  const _RoundHitPoint({
+    required this.arrowNumber,
+    required this.score,
+    required this.x,
+    required this.y,
+  });
+}
+
+class _ScoreStyle {
+  final Color background;
+  final Color text;
+  final bool hasBorder;
+
+  const _ScoreStyle({
+    required this.background,
+    required this.text,
+    required this.hasBorder,
+  });
 }
 
 // Average Table Screen
@@ -513,7 +847,7 @@ class AverageTableScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
