@@ -31,6 +31,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _obscurePasswordBaru = true;
   bool _isMember = false;
   bool _isLoading = true;
+  bool _isSavingProfile = false;
+  bool _isUpdatingPassword = false;
   bool _isRoleUpdating = false;
   List<String> _availableRoles = [];
   String _activeRole = 'non_member';
@@ -57,8 +59,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       print('Profile: isDemoMode = ${userData.isDemoMode}');
 
       final authUser = Supabase.instance.client.auth.currentUser;
-      final supabaseUserId =
-          userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+      final supabaseUserId = userData.userId.isNotEmpty
+          ? userData.userId
+          : authUser?.id ?? '';
 
       // Always fetch from Supabase when user id is available
       if (supabaseUserId.isNotEmpty) {
@@ -137,10 +140,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         print(
           'Profile: Final values - role=${userData.role}, isMember=${userData.isMember}',
         );
-        
+
         _namaLengkapController.text = userData.namaLengkap;
-        _namaPenggunaController.text = userData.email.isNotEmpty 
-            ? userData.email.split('@')[0] 
+        _namaPenggunaController.text = userData.email.isNotEmpty
+            ? userData.email.split('@')[0]
             : userData.namaPengguna;
         _emailController.text = userData.email;
         _noTeleponController.text = userData.nomorTelepon;
@@ -153,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _activeRole = activeRole;
           _isLoading = false;
         });
-        
+
         print('Profile: UI updated with _isMember = $_isMember');
       }
     } catch (e) {
@@ -183,23 +186,103 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  void _saveProfile() {
-    if (_formKey.currentState!.validate()) {
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    if (_isSavingProfile) {
+      return;
+    }
+
+    final fullName = _namaLengkapController.text.trim();
+    final userName = _namaPenggunaController.text.trim();
+    final email = _emailController.text.trim().toLowerCase();
+    final phone = _noTeleponController.text.trim();
+
+    if (!email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Email tidak valid'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isSavingProfile = true;
+    });
+
+    try {
+      final client = Supabase.instance.client;
+      final authUser = client.auth.currentUser;
       final userData = UserData();
-      userData.namaLengkap = _namaLengkapController.text;
-      userData.namaPengguna = _namaPenggunaController.text;
-      userData.email = _emailController.text;
-      userData.nomorTelepon = _noTeleponController.text;
+      await userData.loadData();
+
+      final userId = userData.userId.isNotEmpty
+          ? userData.userId
+          : authUser?.id ?? '';
+      if (userId.isEmpty) {
+        throw Exception('Akun belum terhubung ke database.');
+      }
+
+      final currentEmail = authUser?.email?.trim().toLowerCase() ?? '';
+      if (email.isNotEmpty &&
+          currentEmail.isNotEmpty &&
+          email != currentEmail) {
+        await client.auth.updateUser(UserAttributes(email: email));
+      }
+
+      await client
+          .from('users')
+          .update({
+            'full_name': fullName,
+            'email': email,
+            'phone_number': phone,
+          })
+          .eq('id', userId);
+
+      userData.userId = userId;
+      userData.namaLengkap = fullName;
+      userData.namaPengguna = userName;
+      userData.email = email;
+      userData.nomorTelepon = phone;
+      await userData.saveData();
+
+      if (!mounted) {
+        return;
+      }
 
       setState(() {
         _isEditing = false;
       });
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Profil berhasil disimpan!'),
-          backgroundColor: Color(0xFF10B982),
+        SnackBar(
+          content: Text(
+            email == currentEmail
+                ? 'Profil berhasil disimpan!'
+                : 'Profil berhasil disimpan. Cek email untuk konfirmasi perubahan email.',
+          ),
+          backgroundColor: const Color(0xFF10B982),
         ),
       );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal menyimpan profil: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingProfile = false;
+        });
+      }
     }
   }
 
@@ -245,7 +328,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   String _normalizeRole(String value) {
     var trimmed = value.trim();
-    if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length > 1) {
+    if (trimmed.startsWith('"') &&
+        trimmed.endsWith('"') &&
+        trimmed.length > 1) {
       trimmed = trimmed.substring(1, trimmed.length - 1);
     }
     return trimmed.trim();
@@ -337,7 +422,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  void _changePassword() async {
+  Future<void> _changePassword() async {
+    if (_isUpdatingPassword) {
+      return;
+    }
     if (_passwordLamaController.text.isEmpty ||
         _passwordBaruController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -349,11 +437,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    final userData = UserData();
-    if (_passwordLamaController.text != userData.password) {
+    if (_passwordBaruController.text == _passwordLamaController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Password lama tidak sesuai!'),
+          content: Text('Password baru harus berbeda dari password lama!'),
           backgroundColor: Colors.red,
         ),
       );
@@ -370,21 +457,73 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    userData.password = _passwordBaruController.text;
-    await userData.saveData(); // Save to SharedPreferences
-
     setState(() {
-      _isChangingPassword = false;
-      _passwordLamaController.clear();
-      _passwordBaruController.clear();
+      _isUpdatingPassword = true;
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Password berhasil diubah!'),
-        backgroundColor: Color(0xFF10B982),
-      ),
-    );
+    try {
+      final client = Supabase.instance.client;
+      final authUser = client.auth.currentUser;
+      if (authUser == null) {
+        throw Exception('Sesi login tidak ditemukan. Silakan login ulang.');
+      }
+      final email = (authUser.email ?? _emailController.text).trim();
+      if (email.isEmpty) {
+        throw Exception('Email akun tidak ditemukan.');
+      }
+
+      await client.auth.signInWithPassword(
+        email: email,
+        password: _passwordLamaController.text,
+      );
+
+      await client.auth.updateUser(
+        UserAttributes(password: _passwordBaruController.text),
+      );
+
+      final userData = UserData();
+      await userData.loadData();
+      userData.password = _passwordBaruController.text;
+      await userData.saveData();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isChangingPassword = false;
+        _passwordLamaController.clear();
+        _passwordBaruController.clear();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password berhasil diubah!'),
+          backgroundColor: Color(0xFF10B982),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      final text = e.toString().toLowerCase();
+      String message = 'Gagal mengubah password: $e';
+      if (text.contains('invalid login credentials') ||
+          text.contains('invalid_credentials')) {
+        message = 'Password lama tidak sesuai.';
+      } else if (text.contains('same password')) {
+        message = 'Password baru harus berbeda dari password lama.';
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdatingPassword = false;
+        });
+      }
+    }
   }
 
   void _logout() {
@@ -586,15 +725,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 24),
                     // Edit/Save Button
                     ElevatedButton(
-                      onPressed: () {
-                        if (_isEditing) {
-                          _saveProfile();
-                        } else {
-                          setState(() {
-                            _isEditing = true;
-                          });
-                        }
-                      },
+                      onPressed: _isSavingProfile
+                          ? null
+                          : () async {
+                              if (_isEditing) {
+                                await _saveProfile();
+                              } else {
+                                setState(() {
+                                  _isEditing = true;
+                                });
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF10B982),
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -603,7 +744,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       child: Text(
-                        _isEditing ? 'Simpan Profil' : 'Edit Profile',
+                        _isSavingProfile
+                            ? 'Menyimpan...'
+                            : (_isEditing ? 'Simpan Profil' : 'Edit Profile'),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -888,7 +1031,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
-                      onPressed: _changePassword,
+                      onPressed: _isUpdatingPassword
+                          ? null
+                          : () async {
+                              await _changePassword();
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF10B982),
                         padding: const EdgeInsets.symmetric(vertical: 16),
@@ -896,8 +1043,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text(
-                        'Ubah Password',
+                      child: Text(
+                        _isUpdatingPassword ? 'Menyimpan...' : 'Ubah Password',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
