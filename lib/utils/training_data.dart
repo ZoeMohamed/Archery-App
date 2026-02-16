@@ -271,7 +271,14 @@ class TrainingData {
   }
 
   Future<void> removeSession(TrainingSession session) async {
-    sessions.remove(session);
+    final supabaseId = session.supabaseId?.trim();
+    if (supabaseId != null && supabaseId.isNotEmpty) {
+      sessions.removeWhere((item) => item.supabaseId == supabaseId);
+    } else {
+      sessions.removeWhere(
+        (item) => item.id == session.id || identical(item, session),
+      );
+    }
     await saveData();
   }
 

@@ -39,9 +39,7 @@ class ArcherScoringScreenState extends State<ArcherScoringScreen> {
       final remoteSessions = await service.fetchTrainingHistory();
       await trainingData.mergeRemoteSessions(remoteSessions);
       try {
-        final synced = await service.syncPendingSessions(
-          trainingData.sessions,
-        );
+        final synced = await service.syncPendingSessions(trainingData.sessions);
         if (synced > 0) {
           await trainingData.saveData();
         }
@@ -150,7 +148,7 @@ class ArcherScoringScreenState extends State<ArcherScoringScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -238,7 +236,7 @@ class ArcherScoringScreenState extends State<ArcherScoringScreen> {
                       ],
                     ),
                   );
-                }).toList(),
+                }),
               ],
             ),
           ),
@@ -301,11 +299,34 @@ class ArcherScoringScreenState extends State<ArcherScoringScreen> {
           ),
           TextButton(
             onPressed: () async {
-              await TrainingData().removeSession(session);
-              setState(() {});
+              final messenger = ScaffoldMessenger.of(this.context);
+              Navigator.of(context).pop();
+
+              try {
+                final supabaseId = session.supabaseId?.trim();
+                if (supabaseId != null && supabaseId.isNotEmpty) {
+                  await SupabaseTrainingService().deleteTrainingSession(
+                    supabaseId,
+                  );
+                }
+                await TrainingData().removeSession(session);
+                if (mounted) {
+                  setState(() {});
+                }
+              } catch (e) {
+                if (mounted) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Gagal hapus training: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+                return;
+              }
+
               if (mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
+                messenger.showSnackBar(
                   const SnackBar(
                     content: Text('Training berhasil dihapus'),
                     backgroundColor: Color(0xFF10B982),

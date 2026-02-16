@@ -129,6 +129,28 @@ class SupabaseTrainingService {
     return syncedCount;
   }
 
+  Future<void> deleteTrainingSession(String sessionId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('User belum login.');
+    }
+    if (sessionId.trim().isEmpty) {
+      throw Exception('ID training tidak valid.');
+    }
+
+    final deleted = await _client
+        .from('training_sessions')
+        .delete()
+        .eq('id', sessionId)
+        .eq('user_id', user.id)
+        .select('id');
+
+    final rows = List<Map<String, dynamic>>.from(deleted as List);
+    if (rows.isEmpty) {
+      throw Exception('Training tidak ditemukan atau tidak punya akses hapus.');
+    }
+  }
+
   Map<String, dynamic> _cleanPayload(Map<String, dynamic> payload) {
     final cleaned = <String, dynamic>{};
     payload.forEach((key, value) {
