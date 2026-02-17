@@ -247,6 +247,10 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
               ...List.generate(widget.session.numberOfRounds, (roundIndex) {
                 return _buildRoundCard(roundIndex, playerName);
               }),
+              if (widget.session.inputMethod == 'target_face') ...[
+                const SizedBox(height: 6),
+                _buildAccumulatedTargetSection(playerName),
+              ],
             ],
           ),
         ),
@@ -509,12 +513,88 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
     );
   }
 
+  Widget _buildAccumulatedTargetSection(String playerName) {
+    final visualTargetType = _resolveVisualTargetType(
+      widget.session.targetType,
+    );
+    final hitPoints = _getAccumulatedHitPoints(playerName);
+    final totalArrows =
+        widget.session.numberOfRounds * widget.session.arrowsPerRound;
+    final totalScore = widget.session.getTotalScore(playerName);
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF10B982), width: 2),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Total Keseluruhan',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1FAE5),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Text(
+                  'Total: $totalScore',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF10B982),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _buildTargetPreview(
+            hitPoints,
+            targetType: visualTargetType,
+            markerSize: 20,
+            markerColor: Colors.white,
+            markerTextColor: const Color(0xFFEF4444),
+            markerBorderColor: const Color(0xFFEF4444),
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Text(
+              'Menampilkan ${hitPoints.length} hit dari total $totalArrows arrow',
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTargetPreview(
     List<_RoundHitPoint> hitPoints, {
     required String targetType,
+    double markerSize = 24,
+    Color markerColor = const Color(0xFFEF4444),
+    Color markerTextColor = Colors.white,
+    Color markerBorderColor = Colors.white,
   }) {
     const double targetSize = 220;
-    const double markerSize = 24;
 
     return Center(
       child: Container(
@@ -541,8 +621,10 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
               ...hitPoints.map((point) {
                 final radius = targetSize / 2;
                 final center = targetSize / 2;
-                final left = center + (point.x * radius) - (markerSize / 2);
-                final top = center + (point.y * radius) - (markerSize / 2);
+                final clampedX = point.x.clamp(-1.0, 1.0);
+                final clampedY = point.y.clamp(-1.0, 1.0);
+                final left = center + (clampedX * radius) - (markerSize / 2);
+                final top = center + (clampedY * radius) - (markerSize / 2);
 
                 return Positioned(
                   left: left,
@@ -551,9 +633,9 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
                     width: markerSize,
                     height: markerSize,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEF4444),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.white, width: 2),
+                      color: markerColor,
+                      borderRadius: BorderRadius.circular(markerSize / 2),
+                      border: Border.all(color: markerBorderColor, width: 2),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.2),
@@ -565,9 +647,9 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
                     alignment: Alignment.center,
                     child: Text(
                       '${point.arrowNumber}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.white,
+                      style: TextStyle(
+                        fontSize: markerSize <= 20 ? 10 : 11,
+                        color: markerTextColor,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -581,10 +663,16 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
     );
   }
 
-  Widget _buildHitDetailRow(_RoundHitPoint point) {
+  Widget _buildHitDetailRow(
+    _RoundHitPoint point, {
+    bool showRoundContext = false,
+  }) {
     final distancePercent =
         (math.sqrt((point.x * point.x) + (point.y * point.y)) * 100)
             .toStringAsFixed(1);
+    final arrowLabel = showRoundContext
+        ? 'R${point.roundNumber ?? 1} • Panah ${point.roundArrowNumber ?? point.arrowNumber}'
+        : 'Panah ${point.arrowNumber}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -597,7 +685,7 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
       child: Row(
         children: [
           Text(
-            'Panah ${point.arrowNumber}',
+            arrowLabel,
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -638,6 +726,46 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
         ),
       ),
     );
+  }
+
+  List<_RoundHitPoint> _getAccumulatedHitPoints(String playerName) {
+    final points = <_RoundHitPoint>[];
+    var markerNumber = 1;
+
+    for (
+      var roundIndex = 0;
+      roundIndex < widget.session.numberOfRounds;
+      roundIndex++
+    ) {
+      final roundScores = widget.session.scores[playerName]?[roundIndex] ?? [];
+      final roundHits = _getRoundHits(
+        playerName: playerName,
+        roundIndex: roundIndex,
+        arrowCount: roundScores.length,
+      );
+
+      for (var arrowIndex = 0; arrowIndex < roundScores.length; arrowIndex++) {
+        final score = roundScores[arrowIndex];
+        if (score.isEmpty || widget.session.convertScoreToInt(score) <= 0) {
+          continue;
+        }
+        final hit = arrowIndex < roundHits.length
+            ? roundHits[arrowIndex]
+            : const {'x': 0.0, 'y': 0.0};
+        points.add(
+          _RoundHitPoint(
+            arrowNumber: markerNumber,
+            score: score,
+            x: hit['x'] ?? 0.0,
+            y: hit['y'] ?? 0.0,
+            roundNumber: roundIndex + 1,
+            roundArrowNumber: arrowIndex + 1,
+          ),
+        );
+        markerNumber++;
+      }
+    }
+    return points;
   }
 
   List<Map<String, double>> _getRoundHits({
@@ -747,12 +875,16 @@ class _RoundHitPoint {
   final String score;
   final double x;
   final double y;
+  final int? roundNumber;
+  final int? roundArrowNumber;
 
   const _RoundHitPoint({
     required this.arrowNumber,
     required this.score,
     required this.x,
     required this.y,
+    this.roundNumber,
+    this.roundArrowNumber,
   });
 }
 
