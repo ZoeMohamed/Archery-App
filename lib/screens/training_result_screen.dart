@@ -540,7 +540,7 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
               const Text(
                 'Total Keseluruhan',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
                 ),
