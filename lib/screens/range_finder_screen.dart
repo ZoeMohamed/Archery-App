@@ -413,7 +413,7 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
                 if (_showPresetPanel)
                   Positioned(
                     left: 20,
-                    top: 100,
+                    top: 60,
                     child: Container(
                       width: MediaQuery.of(context).size.width - 100,
                       padding: const EdgeInsets.all(20),
@@ -621,13 +621,13 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
                     ),
                   ),
 
-                // Distance Meter (Bottom)
+                // Distance Meter (Bottom) - Horizontal Ruler
                 Positioned(
                   bottom: 0,
                   left: 0,
                   right: 0,
                   child: Container(
-                    height: 150,
+                    height: 180,
                     decoration: const BoxDecoration(
                       color: Color(0xFF10B982),
                       borderRadius: BorderRadius.only(
@@ -635,68 +635,109 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
                         topRight: Radius.circular(30),
                       ),
                     ),
-                    child: Stack(
+                    child: Column(
                       children: [
-                        // Meter gauge
-                        Positioned(
-                          bottom: 0,
-                          left: 0,
-                          right: 0,
-                          child: CustomPaint(
-                            size: const Size(double.infinity, 150),
-                            painter: MeterGaugePainter(
-                              currentDistance: _distanceMeters,
-                            ),
+                        // Header with title and settings button
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
                           ),
-                        ),
-                        // Slider
-                        Positioned(
-                          top: 20,
-                          left: 20,
-                          right: 20,
-                          child: Column(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  const Text(
-                                    'meter',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(
-                                      _showPresetPanel
-                                          ? Icons.close
-                                          : Icons.settings,
-                                      color: Colors.white,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _showPresetPanel = !_showPresetPanel;
-                                      });
-                                    },
-                                  ),
-                                ],
+                              const Text(
+                                'Jarak (Meter)',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
                               ),
-                              Slider(
-                                value: _distanceMeters,
-                                min: 5.0,
-                                max: 150.0,
-                                divisions: 145,
-                                activeColor: Colors.white,
-                                inactiveColor: Colors.white30,
-                                onChanged: (value) {
+                              IconButton(
+                                icon: Icon(
+                                  _showPresetPanel
+                                      ? Icons.close
+                                      : Icons.settings,
+                                  color: Colors.white,
+                                  size: 28,
+                                ),
+                                onPressed: () {
                                   setState(() {
-                                    _distanceMeters = value;
+                                    _showPresetPanel = !_showPresetPanel;
                                   });
                                 },
                               ),
                             ],
+                          ),
+                        ),
+                        // Horizontal Ruler with Swipe Gesture
+                        Expanded(
+                          child: GestureDetector(
+                            onHorizontalDragUpdate: (details) {
+                              setState(() {
+                                // Swipe sensitivity: 1 pixel = 0.1 meters
+                                final delta = -details.delta.dx * 0.1;
+                                _distanceMeters = (_distanceMeters + delta)
+                                    .clamp(5.0, 150.0);
+                              });
+                            },
+                            child: Container(
+                              color: Colors.transparent,
+                              child: Stack(
+                                children: [
+                                  // Ruler
+                                  Positioned.fill(
+                                    child: CustomPaint(
+                                      painter: HorizontalRulerPainter(
+                                        currentDistance: _distanceMeters,
+                                      ),
+                                    ),
+                                  ),
+                                  // Center indicator (pointer)
+                                  Positioned(
+                                    left: MediaQuery.of(context).size.width / 2 -
+                                        2,
+                                    top: 0,
+                                    bottom: 0,
+                                    child: Container(
+                                      width: 4,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.3),
+                                            blurRadius: 4,
+                                            spreadRadius: 1,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  // Triangle indicator at top
+                                  Positioned(
+                                    left: MediaQuery.of(context).size.width / 2 -
+                                        10,
+                                    top: 0,
+                                    child: CustomPaint(
+                                      size: const Size(20, 15),
+                                      painter: TrianglePointerPainter(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // Darker green rectangular space at bottom
+                        Container(
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF059669),
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(20),
+                              topRight: Radius.circular(20),
+                            ),
                           ),
                         ),
                       ],
@@ -751,10 +792,10 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
   }
 }
 
-class MeterGaugePainter extends CustomPainter {
+class HorizontalRulerPainter extends CustomPainter {
   final double currentDistance;
 
-  MeterGaugePainter({required this.currentDistance});
+  HorizontalRulerPainter({required this.currentDistance});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -763,74 +804,98 @@ class MeterGaugePainter extends CustomPainter {
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke;
 
-    final center = Offset(size.width / 2, size.height);
-    final radius = size.width * 0.4;
+    final centerX = size.width / 2;
+    final baseY = size.height - 10;
 
-    // Draw arc
-    canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius),
-      math.pi,
-      math.pi,
-      false,
-      paint,
-    );
+    // Pixels per meter
+    final pixelsPerMeter = 20.0;
 
-    // Draw ticks
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    // Calculate offset based on current distance
+    final offset = currentDistance * pixelsPerMeter;
 
-    for (int i = 0; i <= 150; i += 5) {
-      final angle = math.pi + (i / 150) * math.pi;
-      final tickLength = i % 10 == 0 ? 15.0 : 8.0;
+    // Draw ruler marks from 5m to 150m
+    for (int i = 5; i <= 150; i++) {
+      final x = centerX + (i * pixelsPerMeter) - offset;
 
-      final startX = center.dx + radius * math.cos(angle);
-      final startY = center.dy + radius * math.sin(angle);
-      final endX = center.dx + (radius - tickLength) * math.cos(angle);
-      final endY = center.dy + (radius - tickLength) * math.sin(angle);
+      // Only draw if visible on screen
+      if (x >= -50 && x <= size.width + 50) {
+        final isMainTick = i % 10 == 0;
+        final isSubTick = i % 5 == 0;
 
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), paint);
+        double tickHeight;
+        if (isMainTick) {
+          tickHeight = 35;
+        } else if (isSubTick) {
+          tickHeight = 25;
+        } else {
+          tickHeight = 15;
+        }
 
-      // Draw numbers at major ticks
-      if (i % 10 == 0 && i <= 150) {
-        textPainter.text = TextSpan(
-          text: i.toString(),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
+        // Draw tick
+        canvas.drawLine(
+          Offset(x, baseY),
+          Offset(x, baseY - tickHeight),
+          paint..strokeWidth = isMainTick ? 2.5 : 1.5,
         );
-        textPainter.layout();
-        final textX =
-            center.dx + (radius - 30) * math.cos(angle) - textPainter.width / 2;
-        final textY =
-            center.dy +
-            (radius - 30) * math.sin(angle) -
-            textPainter.height / 2;
-        textPainter.paint(canvas, Offset(textX, textY));
+
+        // Draw numbers at main ticks (every 10 meters)
+        if (isMainTick) {
+          final textPainter = TextPainter(
+            text: TextSpan(
+              text: i.toString(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            textDirection: TextDirection.ltr,
+          );
+          textPainter.layout();
+          textPainter.paint(
+            canvas,
+            Offset(x - textPainter.width / 2, baseY - tickHeight - 20),
+          );
+        }
       }
     }
 
-    // Draw pointer
-    final pointerAngle = math.pi + (currentDistance / 150) * math.pi;
-    final pointerPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = 3
-      ..style = PaintingStyle.fill;
-
-    final pointerPath = Path();
-    pointerPath.moveTo(center.dx, center.dy);
-    pointerPath.lineTo(
-      center.dx + (radius - 20) * math.cos(pointerAngle),
-      center.dy + (radius - 20) * math.sin(pointerAngle),
+    // Draw horizontal base line
+    canvas.drawLine(
+      Offset(0, baseY),
+      Offset(size.width, baseY),
+      paint..strokeWidth = 2,
     );
-
-    canvas.drawPath(pointerPath, pointerPaint..style = PaintingStyle.stroke);
-
-    // Draw center circle
-    canvas.drawCircle(center, 8, Paint()..color = const Color(0xFF10B982));
   }
 
   @override
-  bool shouldRepaint(MeterGaugePainter oldDelegate) =>
+  bool shouldRepaint(HorizontalRulerPainter oldDelegate) =>
       currentDistance != oldDelegate.currentDistance;
+}
+
+class TrianglePointerPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    final path = Path();
+    path.moveTo(size.width / 2, size.height); // Bottom center
+    path.lineTo(0, 0); // Top left
+    path.lineTo(size.width, 0); // Top right
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    // Add shadow/border
+    final borderPaint = Paint()
+      ..color = Colors.black.withOpacity(0.2)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawPath(path, borderPaint);
+  }
+
+  @override
+  bool shouldRepaint(TrianglePointerPainter oldDelegate) => false;
 }
