@@ -6,6 +6,30 @@ class SummaryTableScreen extends StatelessWidget {
 
   const SummaryTableScreen({super.key, required this.session});
 
+  int _getRoundTotal(String playerName, int roundIndex) {
+    // Check if player has scores
+    if (session.scores[playerName] == null) {
+      return 0;
+    }
+
+    // Check if round index is valid
+    if (roundIndex >= session.scores[playerName]!.length) {
+      return 0;
+    }
+
+    int total = 0;
+    List<String> roundScores = session.scores[playerName]![roundIndex];
+
+    for (var score in roundScores) {
+      if (score.isNotEmpty) {
+        int scoreValue = session.convertScoreToInt(score);
+        total += scoreValue;
+      }
+    }
+
+    return total;
+  }
+
   double _getRoundAverage(String playerName, int roundIndex) {
     // Check if player has scores
     if (session.scores[playerName] == null) {
@@ -148,6 +172,19 @@ class SummaryTableScreen extends StatelessWidget {
                       width: 50,
                       alignment: Alignment.center,
                       child: const Text(
+                        'Total',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  DataColumn(
+                    label: Container(
+                      width: 50,
+                      alignment: Alignment.center,
+                      child: const Text(
                         'AVG',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
@@ -165,6 +202,7 @@ class SummaryTableScreen extends StatelessWidget {
                     roundScores = session.scores[playerName]![roundIndex];
                   }
 
+                  int roundTotal = _getRoundTotal(playerName, roundIndex);
                   double roundAvg = _getRoundAverage(playerName, roundIndex);
 
                   return DataRow(
@@ -204,6 +242,21 @@ class SummaryTableScreen extends StatelessWidget {
                           ),
                         );
                       }),
+                      // Total
+                      DataCell(
+                        Container(
+                          width: 50,
+                          alignment: Alignment.center,
+                          child: Text(
+                            roundTotal > 0 ? roundTotal.toString() : '',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFFBBF24),
+                            ),
+                          ),
+                        ),
+                      ),
                       // Average
                       DataCell(
                         Container(

@@ -134,92 +134,95 @@ class _LombaScreenState extends State<LombaScreen> {
         ),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          // Header Summary
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF10B982), Color(0xFF059669)],
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Header Summary
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF10B982), Color(0xFF059669)],
+                ),
               ),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.emoji_events,
-                    size: 48,
-                    color: Colors.yellow,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Total Prestasi',
-                  style: TextStyle(fontSize: 16, color: Colors.white70),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${_achievements.length} Lomba',
-                  style: const TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Medal Stats
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildMedalStat('🥇', goldCount, 'Emas'),
-                    _buildMedalStat('🥈', silverCount, 'Perak'),
-                    _buildMedalStat('🥉', bronzeCount, 'Perunggu'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          // Filter Chips
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: Colors.white,
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+              child: Column(
                 children: [
-                  _buildFilterChip('Semua'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Emas'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Perak'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip('Perunggu'),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.emoji_events,
+                      size: 48,
+                      color: Colors.yellow,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Total Prestasi',
+                    style: TextStyle(fontSize: 16, color: Colors.white70),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${_achievements.length} Lomba',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Medal Stats
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildMedalStat('🥇', goldCount, 'Emas'),
+                      _buildMedalStat('🥈', silverCount, 'Perak'),
+                      _buildMedalStat('🥉', bronzeCount, 'Perunggu'),
+                    ],
+                  ),
                 ],
               ),
             ),
-          ),
-          // Achievements List
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      valueColor:
-                          AlwaysStoppedAnimation<Color>(Color(0xFF10B982)),
+            // Filter Chips
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: Colors.white,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _buildFilterChip('Semua'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Emas'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Perak'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('Perunggu'),
+                  ],
+                ),
+              ),
+            ),
+            // Achievements List
+            _isLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(100),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Color(0xFF10B982)),
+                      ),
                     ),
                   )
                 : _errorMessage != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 100),
+                        child: Center(
                           child: Text(
                             _errorMessage!,
                             textAlign: TextAlign.center,
@@ -231,7 +234,8 @@ class _LombaScreenState extends State<LombaScreen> {
                         ),
                       )
                     : filteredAchievements.isEmpty
-                        ? Center(
+                        ? Padding(
+                            padding: const EdgeInsets.all(40),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -261,14 +265,16 @@ class _LombaScreenState extends State<LombaScreen> {
                           )
                         : ListView.builder(
                             padding: const EdgeInsets.all(16),
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
                             itemCount: filteredAchievements.length,
                             itemBuilder: (context, index) {
                               final achievement = filteredAchievements[index];
                               return _buildAchievementCard(achievement);
                             },
                           ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
