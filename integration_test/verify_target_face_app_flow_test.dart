@@ -30,10 +30,13 @@ void main() {
   testWidgets('target-face app flow stores input_method and hit coordinates', (
     tester,
   ) async {
-    final email =
-        Platform.environment['SUPABASE_TEST_EMAIL'] ?? 'user@klub.com';
-    final password =
-        Platform.environment['SUPABASE_TEST_PASSWORD'] ?? '22110436*';
+    final email = Platform.environment['SUPABASE_TEST_EMAIL'];
+    final password = Platform.environment['SUPABASE_TEST_PASSWORD'];
+    if (email == null || password == null) {
+      fail(
+        'Set SUPABASE_TEST_EMAIL and SUPABASE_TEST_PASSWORD to run this integration test.',
+      );
+    }
 
     final auth = await client.auth.signInWithPassword(
       email: email,

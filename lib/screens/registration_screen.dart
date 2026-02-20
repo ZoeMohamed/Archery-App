@@ -306,23 +306,59 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     required String userId,
     required String birthDate,
   }) async {
+    final insertPayload = {
+      'id': userId,
+      'email': _emailController.text.trim(),
+      'full_name': _namaLengkapController.text.trim(),
+      'phone_number': _nomorTeleponController.text.trim(),
+      'birth_date': birthDate,
+      'roles': ['non_member'],
+      'active_role': 'non_member',
+    };
+
     try {
-      await Supabase.instance.client.from('users').upsert({
-        'id': userId,
-        'email': _emailController.text.trim(),
-        'full_name': _namaLengkapController.text.trim(),
-        'phone_number': _nomorTeleponController.text.trim(),
-        'birth_date': birthDate,
-        'roles': ['non_member'],
-        'active_role': 'non_member',
-      });
+      await Supabase.instance.client.from('users').insert(insertPayload);
       return true;
     } catch (e) {
-      print('Profile insert failed: $e');
+      final errorText = e.toString().toLowerCase();
+      final isDuplicate =
+          errorText.contains('duplicate') ||
+          errorText.contains('already exists') ||
+          errorText.contains('23505');
+
+      if (!isDuplicate) {
+        print('Profile insert failed: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Gagal menyimpan profil ke database: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+        return false;
+      }
+    }
+
+    // Existing row: update editable profile fields without role escalation.
+    try {
+      await Supabase.instance.client
+          .from('users')
+          .update({
+            'email': _emailController.text.trim(),
+            'full_name': _namaLengkapController.text.trim(),
+            'phone_number': _nomorTeleponController.text.trim(),
+            'birth_date': birthDate,
+          })
+          .eq('id', userId);
+      return true;
+    } catch (e) {
+      print('Profile update failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Gagal menyimpan profil ke database: $e'),
+            content: Text('Gagal memperbarui profil ke database: $e'),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),

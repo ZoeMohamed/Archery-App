@@ -62,18 +62,39 @@ class _TestDbScreenState extends State<TestDbScreen> {
         return;
       }
 
-      // If logged in, try to update current user
-      await client.from('users').upsert({
-        'id': currentUser.id,
-        'email': currentUser.email,
-        'full_name': 'Test User',
-        'role': 'non_member',
-        'is_coach': false,
-      });
+      try {
+        await client.from('users').insert({
+          'id': currentUser.id,
+          'email': currentUser.email ?? '',
+          'full_name': 'Test User',
+          'roles': ['non_member'],
+          'active_role': 'non_member',
+        });
+        setState(() {
+          _result = '✅ INSERT SUCCESS!\n\nUser ID: ${currentUser.id}';
+        });
+      } catch (insertError) {
+        final errorText = insertError.toString().toLowerCase();
+        final isDuplicate =
+            errorText.contains('duplicate') ||
+            errorText.contains('already exists') ||
+            errorText.contains('23505');
+        if (!isDuplicate) {
+          rethrow;
+        }
 
-      setState(() {
-        _result = '✅ UPSERT SUCCESS!\n\nUser ID: ${currentUser.id}';
-      });
+        await client
+            .from('users')
+            .update({
+              'email': currentUser.email ?? '',
+              'full_name': 'Test User',
+            })
+            .eq('id', currentUser.id);
+        setState(() {
+          _result =
+              '✅ UPDATE SUCCESS (existing row)\n\nUser ID: ${currentUser.id}';
+        });
+      }
     } catch (e) {
       setState(() {
         _result =
@@ -139,10 +160,11 @@ class _TestDbScreenState extends State<TestDbScreen> {
       // Use a more valid-looking email format
       final timestamp = DateTime.now().millisecondsSinceEpoch % 100000;
       final testEmail = 'testuser$timestamp@gmail.com';
+      final testPassword = 'Tmp!${DateTime.now().millisecondsSinceEpoch}Aa';
 
       final response = await client.auth.signUp(
         email: testEmail,
-        password: 'Test123456!',
+        password: testPassword,
       );
 
       if (response.user != null) {

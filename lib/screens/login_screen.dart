@@ -50,13 +50,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
         final userId = authResponse.user!.id;
         final userEmail = authResponse.user!.email ?? _emailController.text;
+        String userName = userEmail.split('@')[0];
+        String userRole = 'non_member';
+
+        await _ensureUserProfileRecord(
+          userId: userId,
+          userEmail: userEmail,
+          fallbackName: userName,
+        );
 
         if (!mounted) return;
 
         // 2. Try to fetch profile from database, but don't fail if not exists
-        String userName = userEmail.split('@')[0]; // Default name from email
-        String userRole = 'non_member';
-
         try {
           final profileResponse = await Supabase.instance.client
               .from('users')
@@ -172,6 +177,31 @@ class _LoginScreenState extends State<LoginScreen> {
             _isLoading = false;
           });
         }
+      }
+    }
+  }
+
+  Future<void> _ensureUserProfileRecord({
+    required String userId,
+    required String userEmail,
+    required String fallbackName,
+  }) async {
+    try {
+      await Supabase.instance.client.from('users').insert({
+        'id': userId,
+        'email': userEmail,
+        'full_name': fallbackName,
+        'roles': ['non_member'],
+        'active_role': 'non_member',
+      });
+    } catch (e) {
+      final text = e.toString().toLowerCase();
+      final isDuplicate =
+          text.contains('duplicate') ||
+          text.contains('already exists') ||
+          text.contains('23505');
+      if (!isDuplicate) {
+        print('Ensure login profile failed: $e');
       }
     }
   }

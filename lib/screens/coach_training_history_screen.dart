@@ -49,6 +49,29 @@ class _CoachTrainingHistoryScreenState
     }
   }
 
+  Future<List<Map<String, dynamic>>> _fetchPublicProfiles(
+    List<String> userIds,
+  ) async {
+    if (userIds.isEmpty) {
+      return const [];
+    }
+
+    final client = Supabase.instance.client;
+    try {
+      final response = await client.rpc(
+        'list_user_public_profiles',
+        params: {'user_ids': userIds},
+      );
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (_) {
+      final fallback = await client
+          .from('users')
+          .select('id, full_name')
+          .inFilter('id', userIds);
+      return List<Map<String, dynamic>>.from(fallback as List);
+    }
+  }
+
   Future<void> _loadData() async {
     setState(() {
       _isLoading = true;
@@ -75,12 +98,9 @@ class _CoachTrainingHistoryScreenState
       final userIds = sessions.map((session) => session.userId).toSet().toList();
       final userNames = <String, String>{};
       if (userIds.isNotEmpty) {
-        final userRows = await client
-            .from('users')
-            .select('id, full_name')
-            .inFilter('id', userIds);
-        for (final row in userRows as List) {
-          final data = Map<String, dynamic>.from(row as Map);
+        final userRows = await _fetchPublicProfiles(userIds);
+        for (final row in userRows) {
+          final data = Map<String, dynamic>.from(row);
           final id = data['id']?.toString();
           if (id == null || id.isEmpty) continue;
           userNames[id] = data['full_name']?.toString() ?? 'Pemanah';

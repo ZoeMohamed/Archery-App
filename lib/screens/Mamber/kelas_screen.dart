@@ -123,6 +123,28 @@ class _KelasScreenState extends State<KelasScreen> {
     });
   }
 
+  Future<List<Map<String, dynamic>>> _fetchPublicProfiles(
+    List<String> userIds,
+  ) async {
+    if (userIds.isEmpty) {
+      return const [];
+    }
+
+    try {
+      final response = await _client.rpc(
+        'list_user_public_profiles',
+        params: {'user_ids': userIds},
+      );
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (_) {
+      final fallback = await _client
+          .from('users')
+          .select('id, full_name')
+          .inFilter('id', userIds);
+      return List<Map<String, dynamic>>.from(fallback as List);
+    }
+  }
+
   Future<void> _fetchClasses() async {
     setState(() {
       _isLoading = true;
@@ -167,12 +189,9 @@ class _KelasScreenState extends State<KelasScreen> {
 
       final coachNames = <String, String>{};
       if (coachIds.isNotEmpty) {
-        final coachRows = await _client
-            .from('users')
-            .select('id, full_name')
-            .inFilter('id', coachIds);
-        for (final row in coachRows as List) {
-          final data = Map<String, dynamic>.from(row as Map);
+        final coachRows = await _fetchPublicProfiles(coachIds);
+        for (final row in coachRows) {
+          final data = Map<String, dynamic>.from(row);
           final id = data['id']?.toString();
           if (id == null || id.isEmpty) continue;
           coachNames[id] = data['full_name']?.toString() ?? 'Pelatih';

@@ -27,7 +27,7 @@ class SupabaseService {
     await Supabase.initialize(
       url: supabaseUrl,
       anonKey: supabaseAnonKey,
-      debug: true, // Set to false in production
+      debug: false,
     );
     _client = Supabase.instance.client;
   }
@@ -188,7 +188,6 @@ class SupabaseService {
       );
       
       print('Auth successful! User: ${response.user?.id}'); // Debug
-      print('Session token: ${response.session?.accessToken.substring(0, 30)}...'); // Debug
       
       if (response.user != null) {
         // Skip profile fetch for now - test auth only

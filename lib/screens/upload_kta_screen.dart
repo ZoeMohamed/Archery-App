@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -49,9 +50,7 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
     if (status == 'approved') {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => const KtaCardScreen(),
-        ),
+        MaterialPageRoute(builder: (context) => const KtaCardScreen()),
       );
       return;
     }
@@ -69,8 +68,9 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
   Future<void> _refreshKtaStatus(UserData userData) async {
     try {
       final authUser = Supabase.instance.client.auth.currentUser;
-      final userId =
-          userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+      final userId = userData.userId.isNotEmpty
+          ? userData.userId
+          : authUser?.id ?? '';
       if (userId.isEmpty) {
         return;
       }
@@ -153,8 +153,9 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
       final userData = UserData();
       await userData.loadData();
       final authUser = Supabase.instance.client.auth.currentUser;
-      final userId =
-          userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+      final userId = userData.userId.isNotEmpty
+          ? userData.userId
+          : authUser?.id ?? '';
       if (userId.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -194,8 +195,9 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
         return;
       }
 
-      final confirmedName =
-          userData.namaLengkap.isNotEmpty ? userData.namaLengkap : userData.email;
+      final confirmedName = userData.namaLengkap.isNotEmpty
+          ? userData.namaLengkap
+          : userData.email;
       if (confirmedName.trim().isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -292,8 +294,9 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
       final email = userData.email.isNotEmpty
           ? userData.email
           : Supabase.instance.client.auth.currentUser?.email ?? '';
-      final fullName =
-          userData.namaLengkap.isNotEmpty ? userData.namaLengkap : email;
+      final fullName = userData.namaLengkap.isNotEmpty
+          ? userData.namaLengkap
+          : email;
 
       await Supabase.instance.client.from('users').insert({
         'id': userId,
@@ -326,18 +329,19 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
     try {
       final file = File(filePath);
       final extension = filePath.split('.').last.toLowerCase();
+      final nonce = _secureObjectNonce();
       final path =
-          'kta/$userId/${DateTime.now().millisecondsSinceEpoch}.$extension';
+          'kta/$userId/${DateTime.now().millisecondsSinceEpoch}_$nonce.$extension';
 
-      await Supabase.instance.client.storage.from(_ktaBucket).upload(
+      await Supabase.instance.client.storage
+          .from(_ktaBucket)
+          .upload(
             path,
             file,
             fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
           );
 
-      return Supabase.instance.client.storage.from(_ktaBucket).getPublicUrl(
-            path,
-          );
+      return path;
     } catch (e) {
       debugPrint('KTA upload failed: $e');
       return null;
@@ -388,6 +392,16 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
     final day = value.day.toString().padLeft(2, '0');
     final month = value.month.toString().padLeft(2, '0');
     return '$day/$month/${value.year}';
+  }
+
+  String _secureObjectNonce([int bytes = 12]) {
+    final random = Random.secure();
+    final buffer = StringBuffer();
+    for (var i = 0; i < bytes; i++) {
+      final value = random.nextInt(256);
+      buffer.write(value.toRadixString(16).padLeft(2, '0'));
+    }
+    return buffer.toString();
   }
 
   @override
@@ -754,8 +768,9 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Text(
@@ -785,7 +800,7 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
             currentIndex: 2, // KTA is at index 2 (center button)
             onTap: (index) {
               if (index == 2) return; // Already on Upload KTA screen
-              
+
               // Pop back to MainNavigation with the target index
               Navigator.pop(context, index);
             },

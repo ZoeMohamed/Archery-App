@@ -15,10 +15,13 @@ class KtaCardScreen extends StatefulWidget {
 }
 
 class _KtaCardScreenState extends State<KtaCardScreen> {
+  static const String _ktaBucket = 'kta_app';
+
   bool _isLoading = true;
   String _ktaNumber = '';
   String _validFrom = '';
   String _validUntil = '';
+  String? _resolvedKtaImageUrl;
 
   @override
   void initState() {
@@ -35,6 +38,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
     _validUntil = userData.membershipValidUntil;
 
     await _refreshKtaFromSupabase(userData);
+    _resolvedKtaImageUrl = await _resolveKtaImageUrl(userData.ktaImagePath);
 
     setState(() {
       _isLoading = false;
@@ -43,7 +47,9 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
 
   Future<void> _refreshKtaFromSupabase(UserData userData) async {
     final authUser = Supabase.instance.client.auth.currentUser;
-    final userId = userData.userId.isNotEmpty ? userData.userId : authUser?.id ?? '';
+    final userId = userData.userId.isNotEmpty
+        ? userData.userId
+        : authUser?.id ?? '';
     if (userId.isEmpty) {
       return;
     }
@@ -51,7 +57,9 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
     try {
       final userResponse = await Supabase.instance.client
           .from('users')
-          .select('member_number, kta_valid_from, kta_valid_until, kta_issued_date')
+          .select(
+            'member_number, kta_valid_from, kta_valid_until, kta_issued_date, kta_photo_url',
+          )
           .eq('id', userId)
           .maybeSingle();
 
@@ -63,11 +71,16 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
           userData.membershipNumber = memberNumber;
         }
 
+        final ktaPhotoUrl = userResponse['kta_photo_url']?.toString() ?? '';
+        if (ktaPhotoUrl.isNotEmpty) {
+          userData.ktaImagePath = ktaPhotoUrl;
+        }
+
         final validFromRaw = userResponse['kta_valid_from']?.toString() ?? '';
         final validUntilRaw = userResponse['kta_valid_until']?.toString() ?? '';
         final issuedRaw = userResponse['kta_issued_date']?.toString() ?? '';
-        final validFrom = _parseSupabaseDate(validFromRaw) ??
-            _parseSupabaseDate(issuedRaw);
+        final validFrom =
+            _parseSupabaseDate(validFromRaw) ?? _parseSupabaseDate(issuedRaw);
         final validUntil = _parseSupabaseDate(validUntilRaw);
         if (_applyValidityDates(validFrom, validUntil)) {
           // Supabase validity data applied.
@@ -93,13 +106,127 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
       userData.membershipValidFrom = _validFrom;
       userData.membershipValidUntil = _validUntil;
       await userData.saveData();
-
-      if (mounted) {
-        setState(() {});
-      }
     } catch (e) {
       debugPrint('KTA: failed to fetch Supabase data: $e');
     }
+  }
+
+  Future<String?> _resolveKtaImageUrl(String rawPath) async {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    if (_looksLikeHttpUrl(trimmed)) {
+      final normalized = _normalizeKtaStoragePath(trimmed);
+      if (normalized == null) {
+        return trimmed;
+      }
+      try {
+        return await Supabase.instance.client.storage
+            .from(_ktaBucket)
+            .createSignedUrl(normalized, 3600);
+      } catch (_) {
+        return trimmed;
+      }
+    }
+
+    if (_looksLikeLocalFile(trimmed)) {
+      return null;
+    }
+
+    try {
+      return await Supabase.instance.client.storage
+          .from(_ktaBucket)
+          .createSignedUrl(trimmed, 3600);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _normalizeKtaStoragePath(String rawPath) {
+    final publicMarker = '/storage/v1/object/public/$_ktaBucket/';
+    final signMarker = '/storage/v1/object/sign/$_ktaBucket/';
+
+    final publicIndex = rawPath.indexOf(publicMarker);
+    if (publicIndex >= 0) {
+      return Uri.decodeComponent(
+        rawPath.substring(publicIndex + publicMarker.length),
+      );
+    }
+
+    final signIndex = rawPath.indexOf(signMarker);
+    if (signIndex >= 0) {
+      final rawTail = rawPath.substring(signIndex + signMarker.length);
+      final queryIndex = rawTail.indexOf('?');
+      final pathOnly = queryIndex >= 0
+          ? rawTail.substring(0, queryIndex)
+          : rawTail;
+      return Uri.decodeComponent(pathOnly);
+    }
+
+    return null;
+  }
+
+  bool _looksLikeHttpUrl(String value) {
+    return value.startsWith('http://') || value.startsWith('https://');
+  }
+
+  bool _looksLikeLocalFile(String value) {
+    if (_looksLikeHttpUrl(value)) {
+      return false;
+    }
+    return File(value).existsSync();
+  }
+
+  Widget _buildKtaImage(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) {
+      return _buildImageUnavailable();
+    }
+
+    if (_looksLikeLocalFile(trimmed)) {
+      return Image.file(
+        File(trimmed),
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageUnavailable(),
+      );
+    }
+
+    final url = _resolvedKtaImageUrl;
+    if (url != null && url.isNotEmpty) {
+      return Image.network(
+        url,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageUnavailable(),
+      );
+    }
+
+    if (_looksLikeHttpUrl(trimmed)) {
+      return Image.network(
+        trimmed,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _buildImageUnavailable(),
+      );
+    }
+
+    return _buildImageUnavailable();
+  }
+
+  Widget _buildImageUnavailable() {
+    return Container(
+      width: double.infinity,
+      height: 200,
+      color: const Color(0xFFF3F4F6),
+      alignment: Alignment.center,
+      child: const Text(
+        'Foto KTA tidak tersedia',
+        style: TextStyle(color: Colors.black54, fontWeight: FontWeight.w500),
+      ),
+    );
   }
 
   String _resolveMemberNumber(UserData userData) {
@@ -190,14 +317,13 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
     if (_isLoading) {
       return const Scaffold(
         body: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFF10B982),
-          ),
+          child: CircularProgressIndicator(color: Color(0xFF10B982)),
         ),
       );
     }
 
     final userData = UserData();
+    final hasKtaImage = userData.ktaImagePath.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
@@ -210,10 +336,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
         ),
         title: const Text(
           'Kartu Tanda Anggota',
-          style: TextStyle(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
       ),
@@ -255,9 +378,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                         Positioned.fill(
                           child: Opacity(
                             opacity: 0.1,
-                            child: CustomPaint(
-                              painter: CardPatternPainter(),
-                            ),
+                            child: CustomPaint(painter: CardPatternPainter()),
                           ),
                         ),
                         // Card content
@@ -287,7 +408,8 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                                   const SizedBox(width: 12),
                                   const Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           'Al Ihsan Archery',
@@ -353,7 +475,8 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         const Text(
                                           'Berlaku Dari',
@@ -378,7 +501,8 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                                   ),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         const Text(
                                           'Berlaku Sampai',
@@ -406,7 +530,10 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                               const SizedBox(height: 20),
                               // Category Badge
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(20),
@@ -434,7 +561,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
               ),
               const SizedBox(height: 30),
               // Uploaded KTA Photo Section
-              if (userData.ktaImagePath.isNotEmpty)
+              if (hasKtaImage)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
@@ -479,11 +606,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                       const SizedBox(height: 16),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: Image.file(
-                          File(userData.ktaImagePath),
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
+                        child: _buildKtaImage(userData.ktaImagePath),
                       ),
                       const SizedBox(height: 12),
                       Container(
@@ -516,7 +639,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                     ],
                   ),
                 ),
-              if (userData.ktaImagePath.isNotEmpty) const SizedBox(height: 30),
+              if (hasKtaImage) const SizedBox(height: 30),
               // Info Section
               Container(
                 padding: const EdgeInsets.all(20),
@@ -562,11 +685,23 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
                     const SizedBox(height: 16),
                     const Divider(),
                     const SizedBox(height: 16),
-                    _buildInfoRow(Icons.email_outlined, 'Email', userData.email),
+                    _buildInfoRow(
+                      Icons.email_outlined,
+                      'Email',
+                      userData.email,
+                    ),
                     const SizedBox(height: 12),
-                    _buildInfoRow(Icons.phone_outlined, 'No. Telepon', userData.nomorTelepon),
+                    _buildInfoRow(
+                      Icons.phone_outlined,
+                      'No. Telepon',
+                      userData.nomorTelepon,
+                    ),
                     const SizedBox(height: 12),
-                    _buildInfoRow(Icons.cake_outlined, 'Tanggal Lahir', userData.tanggalLahir),
+                    _buildInfoRow(
+                      Icons.cake_outlined,
+                      'Tanggal Lahir',
+                      userData.tanggalLahir,
+                    ),
                   ],
                 ),
               ),
@@ -629,7 +764,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
             currentIndex: 2, // KTA is at index 2 (center button)
             onTap: (index) {
               if (index == 2) return; // Already on KTA screen
-              
+
               // Pop back to MainNavigation with the target index
               Navigator.pop(context, index);
             },
@@ -712,11 +847,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 18,
-          color: const Color(0xFF6B7280),
-        ),
+        Icon(icon, size: 18, color: const Color(0xFF6B7280)),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -724,10 +855,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
             children: [
               Text(
                 label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF6B7280),
-                ),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
               const SizedBox(height: 2),
               Text(
@@ -750,19 +878,12 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          const Icon(
-            Icons.check_circle,
-            size: 16,
-            color: Color(0xFF10B982),
-          ),
+          const Icon(Icons.check_circle, size: 16, color: Color(0xFF10B982)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF374151),
-              ),
+              style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
             ),
           ),
         ],
@@ -781,21 +902,9 @@ class CardPatternPainter extends CustomPainter {
       ..strokeWidth = 1;
 
     // Draw some decorative circles
-    canvas.drawCircle(
-      Offset(size.width * 0.8, size.height * 0.2),
-      50,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(size.width * 0.9, size.height * 0.7),
-      30,
-      paint,
-    );
-    canvas.drawCircle(
-      Offset(size.width * 0.2, size.height * 0.9),
-      40,
-      paint,
-    );
+    canvas.drawCircle(Offset(size.width * 0.8, size.height * 0.2), 50, paint);
+    canvas.drawCircle(Offset(size.width * 0.9, size.height * 0.7), 30, paint);
+    canvas.drawCircle(Offset(size.width * 0.2, size.height * 0.9), 40, paint);
   }
 
   @override

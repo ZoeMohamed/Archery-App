@@ -35,9 +35,18 @@ void main() async {
   runApp(const MainApp());
 }
 
-const bool _debugAutoLoginEnabled = false;
-const String _debugAutoLoginEmail = 'user@klub.com';
-const String _debugAutoLoginPassword = '22110436*';
+const bool _debugAutoLoginEnabled = bool.fromEnvironment(
+  'DEBUG_AUTO_LOGIN_ENABLED',
+  defaultValue: false,
+);
+const String _debugAutoLoginEmail = String.fromEnvironment(
+  'DEBUG_AUTO_LOGIN_EMAIL',
+  defaultValue: '',
+);
+const String _debugAutoLoginPassword = String.fromEnvironment(
+  'DEBUG_AUTO_LOGIN_PASSWORD',
+  defaultValue: '',
+);
 
 class MainApp extends StatelessWidget {
   const MainApp({super.key});
@@ -89,7 +98,11 @@ class MainApp extends StatelessWidget {
           ),
         ),
       ),
-      home: kDebugMode && _debugAutoLoginEnabled
+      home:
+          kDebugMode &&
+              _debugAutoLoginEnabled &&
+              _debugAutoLoginEmail.isNotEmpty &&
+              _debugAutoLoginPassword.isNotEmpty
           ? const _DebugAutoLoginGate()
           : const _AuthGate(),
     );

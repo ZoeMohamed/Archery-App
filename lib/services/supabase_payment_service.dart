@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,7 +8,7 @@ import '../models/supabase/db_helpers.dart';
 
 class SupabasePaymentService {
   SupabasePaymentService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client;
 
   static const String paymentBucket = 'payment_proofs';
 
@@ -19,11 +20,14 @@ class SupabasePaymentService {
     required DateTime paymentMonth,
   }) async {
     final extension = _fileExtension(file.path);
+    final nonce = _secureObjectNonce();
     final path =
-        'payments/$userId/${_formatMonth(paymentMonth)}/${DateTime.now().millisecondsSinceEpoch}.$extension';
+        'payments/$userId/${_formatMonth(paymentMonth)}/${DateTime.now().millisecondsSinceEpoch}_$nonce.$extension';
     final contentType = _contentTypeForExtension(extension);
 
-    await _client.storage.from(paymentBucket).upload(
+    await _client.storage
+        .from(paymentBucket)
+        .upload(
           path,
           file,
           fileOptions: FileOptions(
@@ -55,14 +59,20 @@ class SupabasePaymentService {
       payload['notes'] = notes.trim();
     }
 
-    final response =
-        await _client.from('payments').insert(payload).select().single();
+    final response = await _client
+        .from('payments')
+        .insert(payload)
+        .select()
+        .single();
     return Map<String, dynamic>.from(response);
   }
 
   Future<Map<String, dynamic>?> fetchPaymentById(String id) async {
-    final response =
-        await _client.from('payments').select().eq('id', id).maybeSingle();
+    final response = await _client
+        .from('payments')
+        .select()
+        .eq('id', id)
+        .maybeSingle();
     if (response == null) {
       return null;
     }
@@ -85,16 +95,16 @@ class SupabasePaymentService {
     if (path == null || path.isEmpty) {
       return null;
     }
+    final normalizedPath = _normalizeStoragePath(path);
+    if (normalizedPath == null || normalizedPath.isEmpty) {
+      return null;
+    }
     try {
       return await _client.storage
           .from(paymentBucket)
-          .createSignedUrl(path, 3600);
+          .createSignedUrl(normalizedPath, 3600);
     } catch (_) {
-      try {
-        return _client.storage.from(paymentBucket).getPublicUrl(path);
-      } catch (_) {
-        return null;
-      }
+      return null;
     }
   }
 
@@ -144,5 +154,46 @@ class SupabasePaymentService {
   String _formatMonth(DateTime value) {
     final month = value.month.toString().padLeft(2, '0');
     return '${value.year}-$month';
+  }
+
+  String _secureObjectNonce([int bytes = 12]) {
+    final random = Random.secure();
+    final buffer = StringBuffer();
+    for (var i = 0; i < bytes; i++) {
+      final value = random.nextInt(256);
+      buffer.write(value.toRadixString(16).padLeft(2, '0'));
+    }
+    return buffer.toString();
+  }
+
+  String? _normalizeStoragePath(String rawPath) {
+    final trimmed = rawPath.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+
+    final publicMarker = '/storage/v1/object/public/$paymentBucket/';
+    final signMarker = '/storage/v1/object/sign/$paymentBucket/';
+
+    final publicIndex = trimmed.indexOf(publicMarker);
+    if (publicIndex >= 0) {
+      return Uri.decodeComponent(
+        trimmed.substring(publicIndex + publicMarker.length),
+      );
+    }
+
+    final signIndex = trimmed.indexOf(signMarker);
+    if (signIndex >= 0) {
+      final rawTail = trimmed.substring(signIndex + signMarker.length);
+      final qIdx = rawTail.indexOf('?');
+      final pathOnly = qIdx >= 0 ? rawTail.substring(0, qIdx) : rawTail;
+      return Uri.decodeComponent(pathOnly);
+    }
+
+    return null;
   }
 }

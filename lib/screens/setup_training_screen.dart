@@ -36,14 +36,63 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
     });
   }
 
+  String _normalizeInputMethod(String? value) {
+    return value == 'target_face' ? 'target_face' : 'arrow_values';
+  }
+
+  List<String> _targetOptionsForInputMethod(String inputMethod) {
+    if (inputMethod == 'target_face') {
+      return const ['Face Ring 6', 'Ring Puta', 'Face Mega Mendung'];
+    }
+    return const ['Default', 'Face Ring 6', 'Ring Puta', 'Face Mega Mendung'];
+  }
+
+  String _normalizedTargetForInputMethod(String target, String inputMethod) {
+    final options = _targetOptionsForInputMethod(inputMethod);
+    final trimmed = target.trim();
+    if (options.contains(trimmed)) {
+      return trimmed;
+    }
+
+    final normalized = trimmed
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+        .trim();
+
+    const knownMappings = <String, String>{
+      'default': 'Default',
+      'face ring 6': 'Face Ring 6',
+      'ring puta': 'Ring Puta',
+      'face mega mendung': 'Face Mega Mendung',
+      // Legacy labels from older presets.
+      'target a': 'Default',
+      'target b': 'Default',
+      'target c': 'Default',
+    };
+
+    final mapped = knownMappings[normalized];
+    if (mapped != null && options.contains(mapped)) {
+      return mapped;
+    }
+
+    return options.first;
+  }
+
+  String _currentTargetValue() {
+    return _normalizedTargetForInputMethod(_selectedTarget, _inputMethod);
+  }
+
   void _loadFromTemplate(TrainingTemplate template) {
     setState(() {
       _selectedTemplate = template;
       _numberOfPlayers = template.numberOfPlayers;
       _numberOfRounds = template.numberOfRounds;
       _arrowsPerRound = template.arrowsPerRound;
-      _selectedTarget = template.targetType;
-      _inputMethod = template.inputMethod;
+      _inputMethod = _normalizeInputMethod(template.inputMethod);
+      _selectedTarget = _normalizedTargetForInputMethod(
+        template.targetType,
+        _inputMethod,
+      );
       _trainingNameController.text = template.name;
 
       // Update player controllers
@@ -83,6 +132,8 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
   }
 
   Future<void> _saveAsTemplate() async {
+    final targetValue = _currentTargetValue();
+
     List<String> playerNames = [];
     if (_numberOfPlayers == 1) {
       playerNames.add('Saya');
@@ -100,7 +151,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       playerNames: playerNames,
       numberOfRounds: _numberOfRounds,
       arrowsPerRound: _arrowsPerRound,
-      targetType: _selectedTarget,
+      targetType: targetValue,
       inputMethod: _inputMethod,
     );
 
@@ -117,6 +168,8 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
   }
 
   void _startTraining() async {
+    final targetValue = _currentTargetValue();
+
     // Validate
     if (_numberOfPlayers > 1) {
       bool hasEmptyName = _playerNameControllers
@@ -156,7 +209,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       playerNames: playerNames,
       numberOfRounds: _numberOfRounds,
       arrowsPerRound: _arrowsPerRound,
-      targetType: _selectedTarget,
+      targetType: targetValue,
       inputMethod: _inputMethod,
       scores: {},
       trainingName: _trainingNameController.text.trim().isNotEmpty
@@ -247,6 +300,9 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final targetOptions = _targetOptionsForInputMethod(_inputMethod);
+    final selectedTarget = _currentTargetValue();
+
     return Scaffold(
       backgroundColor: const Color(0xFFE8F5E9),
       appBar: AppBar(
@@ -573,23 +629,18 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: _selectedTarget,
+                          value: selectedTarget,
                           isExpanded: true,
                           icon: const Icon(
                             Icons.arrow_drop_down,
                             color: Color(0xFF10B982),
                           ),
-                          items:
-                              (_inputMethod == 'arrow_values'
-                                      ? ['Default', 'Face Ring 6', 'Ring Puta', 'Face Mega Mendung']
-                                      : ['Face Ring 6', 'Ring Puta', 'Face Mega Mendung'])
-                                  .map((String value) {
-                                    return DropdownMenuItem<String>(
-                                      value: value,
-                                      child: Text(value),
-                                    );
-                                  })
-                                  .toList(),
+                          items: targetOptions.map((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
                           onChanged: (String? newValue) {
                             if (newValue != null) {
                               setState(() {
@@ -620,11 +671,11 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                _selectedTarget == 'Face Ring 6'
+                                selectedTarget == 'Face Ring 6'
                                     ? 'Scoring Face Ring 6'
-                                    : _selectedTarget == 'Ring Puta'
+                                    : selectedTarget == 'Ring Puta'
                                     ? 'Scoring Ring Puta'
-                                    : _selectedTarget == 'Face Mega Mendung'
+                                    : selectedTarget == 'Face Mega Mendung'
                                     ? 'Scoring Face Mega Mendung'
                                     : 'Scoring Default',
                                 style: const TextStyle(
@@ -639,7 +690,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                           Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: _selectedTarget == 'Face Ring 6'
+                            children: selectedTarget == 'Face Ring 6'
                                 ? [
                                     // Face Ring 6: 6,5,4 (Gold), 3 (Red), 2 (White), 1 (Blue)
                                     _buildScoreChip(
@@ -664,28 +715,49 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                                       const Color(0xFF3B82F6),
                                     ), // Blue
                                   ]
-                                : _selectedTarget == 'Ring Puta'
+                                : selectedTarget == 'Ring Puta'
                                 ? [
                                     // Ring Puta: 2 (White), 1 (Reddish Brown)
+                                    _buildScoreChip('2', Colors.white), // White
                                     _buildScoreChip(
-                                      '2',
-                                      Colors.white,
-                                    ), // White
-                                    _buildScoreChip('1', const Color(0xFF7C2D2D)), // Reddish Brown
+                                      '1',
+                                      const Color(0xFF7C2D2D),
+                                    ), // Reddish Brown
                                   ]
-                                : _selectedTarget == 'Face Mega Mendung'
+                                : selectedTarget == 'Face Mega Mendung'
                                 ? [
                                     // Face Mega Mendung: 10-1 points
-                                    _buildScoreChip('10', const Color(0xFFFBBF24)), // Yellow
-                                    _buildScoreChip('9', const Color(0xFFEF4444)),  // Red
-                                    _buildScoreChip('8', Colors.white),             // White
-                                    _buildScoreChip('7', const Color(0xFF60A5FA)), // Lt Blue
-                                    _buildScoreChip('6', const Color(0xFFFBBF24)), // Yellow
-                                    _buildScoreChip('5', const Color(0xFFEF4444)), // Red
-                                    _buildScoreChip('4', Colors.white),            // White
-                                    _buildScoreChip('3', const Color(0xFF60A5FA)),// Lt Blue
-                                    _buildScoreChip('2', const Color(0xFF1E3A8A)),// Dk Blue
-                                    _buildScoreChip('1', Colors.white),            // White
+                                    _buildScoreChip(
+                                      '10',
+                                      const Color(0xFFFBBF24),
+                                    ), // Yellow
+                                    _buildScoreChip(
+                                      '9',
+                                      const Color(0xFFEF4444),
+                                    ), // Red
+                                    _buildScoreChip('8', Colors.white), // White
+                                    _buildScoreChip(
+                                      '7',
+                                      const Color(0xFF60A5FA),
+                                    ), // Lt Blue
+                                    _buildScoreChip(
+                                      '6',
+                                      const Color(0xFFFBBF24),
+                                    ), // Yellow
+                                    _buildScoreChip(
+                                      '5',
+                                      const Color(0xFFEF4444),
+                                    ), // Red
+                                    _buildScoreChip('4', Colors.white), // White
+                                    _buildScoreChip(
+                                      '3',
+                                      const Color(0xFF60A5FA),
+                                    ), // Lt Blue
+                                    _buildScoreChip(
+                                      '2',
+                                      const Color(0xFF1E3A8A),
+                                    ), // Dk Blue
+                                    _buildScoreChip('1', Colors.white), // White
                                   ]
                                 : [
                                     // Default
@@ -854,7 +926,8 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
 
   Widget _buildScoreChip(String label, Color color) {
     // Determine text color based on background color brightness
-    bool isLightBackground = color == Colors.white ||
+    bool isLightBackground =
+        color == Colors.white ||
         color == Colors.grey[200] ||
         color == Colors.yellow[700] ||
         color == const Color(0xFFFBBF24); // Gold color
@@ -865,8 +938,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
         color: color,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: color == Colors.grey[200] ||
-                  color == Colors.white
+          color: color == Colors.grey[200] || color == Colors.white
               ? Colors.grey
               : color,
           width: 1,

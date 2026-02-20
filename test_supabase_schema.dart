@@ -101,37 +101,43 @@ Future<void> testSupabaseSchema() async {
     
     // Try to sign in with test user
     try {
-      print('   Attempting login with user@klub.com...');
-      final authResponse = await supabase.auth.signInWithPassword(
-        email: 'user@klub.com',
-        password: 'password123',
-      );
-      
-      if (authResponse.user != null) {
-        print('   ✓ Login successful!');
-        print('     User ID: ${authResponse.user!.id}');
-        print('     Email: ${authResponse.user!.email}');
-        
-        // Try to fetch profile
-        try {
-          final profile = await supabase
-              .from('users')
-              .select('*')
-              .eq('id', authResponse.user!.id)
-              .single();
-          
-          print('   ✓ Profile fetch successful!');
-          print('     Name: ${profile['full_name']}');
-          print('     Role: ${profile['role']}');
-        } catch (e) {
-          print('   ✗ Profile fetch failed: $e');
-        }
-        
-        // Sign out
-        await supabase.auth.signOut();
-        print('   ✓ Sign out successful');
+      final email = const String.fromEnvironment('SUPABASE_TEST_EMAIL');
+      final password = const String.fromEnvironment('SUPABASE_TEST_PASSWORD');
+      if (email.isEmpty || password.isEmpty) {
+        print('   ⚠ Skipping auth test: SUPABASE_TEST_EMAIL/PASSWORD not set.');
       } else {
-        print('   ✗ Login failed - no user returned');
+        print('   Attempting login with $email...');
+        final authResponse = await supabase.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+        
+        if (authResponse.user != null) {
+          print('   ✓ Login successful!');
+          print('     User ID: ${authResponse.user!.id}');
+          print('     Email: ${authResponse.user!.email}');
+          
+          // Try to fetch profile
+          try {
+            final profile = await supabase
+                .from('users')
+                .select('*')
+                .eq('id', authResponse.user!.id)
+                .single();
+            
+            print('   ✓ Profile fetch successful!');
+            print('     Name: ${profile['full_name']}');
+            print('     Role: ${profile['role']}');
+          } catch (e) {
+            print('   ✗ Profile fetch failed: $e');
+          }
+          
+          // Sign out
+          await supabase.auth.signOut();
+          print('   ✓ Sign out successful');
+        } else {
+          print('   ✗ Login failed - no user returned');
+        }
       }
     } catch (e) {
       print('   ✗ Login failed: $e');

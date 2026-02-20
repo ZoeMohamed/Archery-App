@@ -18,12 +18,18 @@ Future<void> main(List<String> args) async {
       _defaultAnonKey;
   final email =
       options['email'] ??
-      Platform.environment['SUPABASE_TEST_EMAIL'] ??
-      'user@klub.com';
+      Platform.environment['SUPABASE_TEST_EMAIL'];
   final password =
       options['password'] ??
-      Platform.environment['SUPABASE_TEST_PASSWORD'] ??
-      '22110436*';
+      Platform.environment['SUPABASE_TEST_PASSWORD'];
+
+  if (email == null || email.isEmpty || password == null || password.isEmpty) {
+    stderr.writeln(
+      'Set SUPABASE_TEST_EMAIL and SUPABASE_TEST_PASSWORD (or pass --email and --password).',
+    );
+    exitCode = 2;
+    return;
+  }
 
   final baseUrl = supabaseUrl.replaceFirst(RegExp(r'/$'), '');
   final marker = DateTime.now().millisecondsSinceEpoch.toString();

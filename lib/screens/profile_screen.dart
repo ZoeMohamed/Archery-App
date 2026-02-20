@@ -481,11 +481,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         UserAttributes(password: _passwordBaruController.text),
       );
 
-      final userData = UserData();
-      await userData.loadData();
-      userData.password = _passwordBaruController.text;
-      await userData.saveData();
-
       if (!mounted) {
         return;
       }

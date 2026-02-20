@@ -15,7 +15,6 @@ class UserData {
   String nomorTelepon = '';
   String tanggalLahir = '';
   String kategori = '';
-  String password = '';
   
   // Membership fields
   bool isMember = false;
@@ -44,7 +43,6 @@ class UserData {
     nomorTelepon = prefs.getString('nomorTelepon') ?? '';
     tanggalLahir = prefs.getString('tanggalLahir') ?? '';
     kategori = prefs.getString('kategori') ?? '';
-    password = prefs.getString('password') ?? '';
     isMember = prefs.getBool('isMember') ?? false;
     ktaStatus = prefs.getString('ktaStatus') ?? 'none';
     membershipNumber = prefs.getString('membershipNumber') ?? '';
@@ -84,7 +82,6 @@ class UserData {
     await prefs.setString('memberStatus', memberStatus);
     await prefs.setString('memberNumber', memberNumber);
     await prefs.setBool('isDemoMode', isDemoMode);
-    await prefs.setString('password', password);
     await prefs.setBool('isMember', isMember);
     await prefs.setString('ktaStatus', ktaStatus);
     await prefs.setString('membershipNumber', membershipNumber);
@@ -119,7 +116,6 @@ class UserData {
     nomorTelepon = '';
     tanggalLahir = '';
     kategori = '';
-    password = '';
     
     isMember = false;
     ktaStatus = 'none';
@@ -145,7 +141,6 @@ class UserData {
       'nomorTelepon',
       'tanggalLahir',
       'kategori',
-      'password',
       'isMember',
       'ktaStatus',
       'membershipNumber',

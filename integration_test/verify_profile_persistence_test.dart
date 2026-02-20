@@ -14,11 +14,21 @@ void main() {
 
   late SupabaseClient client;
 
-  final email = Platform.environment['SUPABASE_TEST_EMAIL'] ?? 'user@klub.com';
-  final password =
-      Platform.environment['SUPABASE_TEST_PASSWORD'] ?? '22110436*';
+  final envEmail = Platform.environment['SUPABASE_TEST_EMAIL'];
+  final envPassword = Platform.environment['SUPABASE_TEST_PASSWORD'];
+  late final String email;
+  late final String password;
 
   setUpAll(() async {
+    final checkedEmail = envEmail;
+    final checkedPassword = envPassword;
+    if (checkedEmail == null || checkedPassword == null) {
+      fail(
+        'Set SUPABASE_TEST_EMAIL and SUPABASE_TEST_PASSWORD to run this integration test.',
+      );
+    }
+    email = checkedEmail;
+    password = checkedPassword;
     await Supabase.initialize(
       url: _defaultSupabaseUrl,
       anonKey: _defaultAnonKey,
