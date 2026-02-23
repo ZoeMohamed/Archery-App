@@ -96,9 +96,11 @@ class DbLatestCompetitionNewsView {
   final String? competitionName;
   final DateTime? competitionDate;
   final String? location;
+  final String? category;
+  final int? totalParticipants;
   final DateTime? publishedAt;
-  final List<String> winnerIds;
   final List<String> winnerNames;
+  final List<String> medals;
 
   const DbLatestCompetitionNewsView({
     required this.id,
@@ -108,9 +110,11 @@ class DbLatestCompetitionNewsView {
     this.competitionName,
     this.competitionDate,
     this.location,
+    this.category,
+    this.totalParticipants,
     this.publishedAt,
-    required this.winnerIds,
     required this.winnerNames,
+    required this.medals,
   });
 
   factory DbLatestCompetitionNewsView.fromJson(Map<String, dynamic> json) {
@@ -122,9 +126,11 @@ class DbLatestCompetitionNewsView {
       competitionName: json['competition_name']?.toString(),
       competitionDate: DbHelpers.parseDate(json['competition_date']),
       location: json['location']?.toString(),
+      category: json['category']?.toString(),
+      totalParticipants: (json['total_participants'] as num?)?.toInt(),
       publishedAt: DbHelpers.parseTimestamp(json['published_at']),
-      winnerIds: DbHelpers.parseStringList(json['winner_ids']),
       winnerNames: DbHelpers.parseStringList(json['winner_names']),
+      medals: DbHelpers.parseStringList(json['medals']),
     );
   }
 }

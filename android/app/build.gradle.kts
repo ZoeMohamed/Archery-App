@@ -16,11 +16,21 @@ if (hasReleaseKeystore) {
 val isReleaseTaskRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
+val requireReleaseSigning = (
+    System.getenv("REQUIRE_RELEASE_SIGNING")?.equals("true", ignoreCase = true) == true ||
+        System.getenv("CI")?.equals("true", ignoreCase = true) == true
+)
 
-if (!hasReleaseKeystore && isReleaseTaskRequested) {
+if (!hasReleaseKeystore && isReleaseTaskRequested && requireReleaseSigning) {
     throw GradleException(
         "Release signing is not configured. Create android/keystore.properties " +
             "with keyAlias, keyPassword, storeFile, and storePassword.",
+    )
+}
+if (!hasReleaseKeystore && isReleaseTaskRequested && !requireReleaseSigning) {
+    logger.warn(
+        "Release keystore is not configured. Using debug signing for local release build. " +
+            "Set REQUIRE_RELEASE_SIGNING=true to enforce release signing.",
     )
 }
 
@@ -66,6 +76,8 @@ android {
             isShrinkResources = true
             if (hasReleaseKeystore) {
                 signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
             }
         }
     }

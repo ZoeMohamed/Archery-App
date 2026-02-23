@@ -4,12 +4,13 @@ class DbCompetitionNews {
   final String? id;
   final String title;
   final String content;
-  final List<String> winnerIds;
   final String? imageUrl;
   final List<String>? galleryUrls;
   final String? competitionName;
   final DateTime? competitionDate;
   final String? location;
+  final String? category;
+  final int? totalParticipants;
   final String? publishedBy;
   final bool isPublished;
   final DateTime? publishedAt;
@@ -20,12 +21,13 @@ class DbCompetitionNews {
     this.id,
     required this.title,
     required this.content,
-    required this.winnerIds,
     this.imageUrl,
     this.galleryUrls,
     this.competitionName,
     this.competitionDate,
     this.location,
+    this.category,
+    this.totalParticipants,
     this.publishedBy,
     this.isPublished = false,
     this.publishedAt,
@@ -38,12 +40,13 @@ class DbCompetitionNews {
       id: json['id']?.toString(),
       title: json['title']?.toString() ?? '',
       content: json['content']?.toString() ?? '',
-      winnerIds: DbHelpers.parseStringList(json['winner_ids']),
       imageUrl: json['image_url']?.toString(),
       galleryUrls: DbHelpers.parseStringList(json['gallery_urls']),
       competitionName: json['competition_name']?.toString(),
       competitionDate: DbHelpers.parseDate(json['competition_date']),
       location: json['location']?.toString(),
+      category: json['category']?.toString(),
+      totalParticipants: (json['total_participants'] as num?)?.toInt(),
       publishedBy: json['published_by']?.toString(),
       isPublished: json['is_published'] == true,
       publishedAt: DbHelpers.parseTimestamp(json['published_at']),
@@ -57,12 +60,13 @@ class DbCompetitionNews {
       'id': id,
       'title': title,
       'content': content,
-      'winner_ids': winnerIds,
       'image_url': imageUrl,
       'gallery_urls': galleryUrls,
       'competition_name': competitionName,
       'competition_date': DbHelpers.formatDate(competitionDate),
       'location': location,
+      'category': category,
+      'total_participants': totalParticipants,
       'published_by': publishedBy,
       'is_published': isPublished,
       'published_at': DbHelpers.formatTimestamp(publishedAt),

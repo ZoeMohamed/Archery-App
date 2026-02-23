@@ -13,6 +13,12 @@ class DbKtaApplication {
   final String? rejectionReason;
   final String? processedBy;
   final DateTime? processedAt;
+
+  // Correction fields (from KTA OCR / admin edit)
+  final String? memberNumber;
+  final DateTime? ktaValidFrom;
+  final DateTime? ktaValidUntil;
+
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -29,6 +35,9 @@ class DbKtaApplication {
     this.rejectionReason,
     this.processedBy,
     this.processedAt,
+    this.memberNumber,
+    this.ktaValidFrom,
+    this.ktaValidUntil,
     this.createdAt,
     this.updatedAt,
   });
@@ -48,6 +57,9 @@ class DbKtaApplication {
       rejectionReason: json['rejection_reason']?.toString(),
       processedBy: json['processed_by']?.toString(),
       processedAt: DbHelpers.parseTimestamp(json['processed_at']),
+      memberNumber: json['member_number']?.toString(),
+      ktaValidFrom: DbHelpers.parseDate(json['kta_valid_from']),
+      ktaValidUntil: DbHelpers.parseDate(json['kta_valid_until']),
       createdAt: DbHelpers.parseTimestamp(json['created_at']),
       updatedAt: DbHelpers.parseTimestamp(json['updated_at']),
     );
@@ -67,6 +79,9 @@ class DbKtaApplication {
       'rejection_reason': rejectionReason,
       'processed_by': processedBy,
       'processed_at': DbHelpers.formatTimestamp(processedAt),
+      'member_number': memberNumber,
+      'kta_valid_from': DbHelpers.formatDate(ktaValidFrom),
+      'kta_valid_until': DbHelpers.formatDate(ktaValidUntil),
       'created_at': DbHelpers.formatTimestamp(createdAt),
       'updated_at': DbHelpers.formatTimestamp(updatedAt),
     };

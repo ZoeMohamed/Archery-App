@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/kta_ocr_service.dart';
 import '../utils/user_data.dart';
 import 'kta_card_screen.dart';
 import 'verification_status_screen.dart';
@@ -20,9 +21,16 @@ class UploadKtaScreen extends StatefulWidget {
 class _UploadKtaScreenState extends State<UploadKtaScreen> {
   final _formKey = GlobalKey<FormState>();
   final _noAnggotaController = TextEditingController();
+  final _validFromController = TextEditingController();
+  final _validUntilController = TextEditingController();
+  final KtaOcrService _ktaOcrService = KtaOcrService();
   String? _uploadedKtaImage;
   bool _isCheckingStatus = true;
   bool _isSubmitting = false;
+  bool _isExtractingOcr = false;
+  bool _validFromAutoFilled = false;
+  String _ocrStatusMessage = '';
+  int _ocrRequestToken = 0;
 
   static const String _ktaBucket = 'kta_app';
 
@@ -35,6 +43,11 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
   Future<void> _initialize() async {
     final userData = UserData();
     await userData.loadData();
+    _noAnggotaController.text = userData.memberNumber.isNotEmpty
+        ? userData.memberNumber
+        : userData.membershipNumber;
+    _validFromController.text = userData.membershipValidFrom;
+    _validUntilController.text = userData.membershipValidUntil;
     await _refreshKtaStatus(userData);
     if (!mounted) return;
     final status = userData.ktaStatus.toLowerCase().trim();
@@ -62,6 +75,9 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
   @override
   void dispose() {
     _noAnggotaController.dispose();
+    _validFromController.dispose();
+    _validUntilController.dispose();
+    _ktaOcrService.dispose();
     super.dispose();
   }
 
@@ -109,11 +125,16 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
       if (image != null) {
         setState(() {
           _uploadedKtaImage = image.path;
+          _ocrStatusMessage = 'Foto KTA dipilih. Memproses OCR...';
+          _isExtractingOcr = true;
         });
+
+        await _extractKtaDataFromImage(image.path);
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Foto KTA berhasil dipilih!'),
+              content: Text('Foto KTA berhasil dipilih.'),
               backgroundColor: Color(0xFF10B982),
               duration: Duration(seconds: 2),
             ),
@@ -121,6 +142,12 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
         }
       }
     } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isExtractingOcr = false;
+          _ocrStatusMessage = 'OCR gagal dijalankan. Silakan isi data manual.';
+        });
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -132,12 +159,161 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
     }
   }
 
+  Future<void> _extractKtaDataFromImage(String imagePath) async {
+    final currentToken = ++_ocrRequestToken;
+    try {
+      final extraction = await _ktaOcrService.extractFromImagePath(imagePath);
+      if (!mounted || currentToken != _ocrRequestToken) {
+        return;
+      }
+      _applyOcrExtraction(extraction);
+    } catch (e) {
+      if (!mounted || currentToken != _ocrRequestToken) {
+        return;
+      }
+      setState(() {
+        _isExtractingOcr = false;
+        _ocrStatusMessage = 'OCR gagal membaca foto. Silakan isi data manual.';
+      });
+    }
+  }
+
+  void _applyOcrExtraction(KtaOcrExtraction extraction) {
+    final extractedMemberNumber = extraction.memberNumber?.trim() ?? '';
+    if (extractedMemberNumber.isNotEmpty) {
+      _noAnggotaController.text = extractedMemberNumber;
+    }
+
+    if (extraction.validUntil != null) {
+      _validUntilController.text = _formatLocalDate(extraction.validUntil!);
+    }
+    if (extraction.validFrom != null) {
+      _validFromController.text = _formatLocalDate(extraction.validFrom!);
+      _validFromAutoFilled = true;
+    } else {
+      _deriveValidFromFromUntil(force: true);
+    }
+
+    setState(() {
+      _isExtractingOcr = false;
+      _ocrStatusMessage = extraction.hasAnySuggestion
+          ? 'Data OCR terdeteksi. Cek dan validasi sebelum kirim.'
+          : 'OCR tidak menemukan nomor/tanggal yang jelas. Isi manual.';
+    });
+  }
+
+  void _deriveValidFromFromUntil({bool force = false}) {
+    final parsedUntil = _parseDateInput(_validUntilController.text);
+    if (parsedUntil == null) {
+      return;
+    }
+    if (!force &&
+        !_validFromAutoFilled &&
+        _validFromController.text.isNotEmpty) {
+      return;
+    }
+    final validFrom = _subtractOneYear(parsedUntil);
+    _validFromController.text = _formatLocalDate(validFrom);
+    _validFromAutoFilled = true;
+  }
+
+  DateTime _subtractOneYear(DateTime value) {
+    final targetYear = value.year - 1;
+    final maxDayInMonth = DateTime(targetYear, value.month + 1, 0).day;
+    final safeDay = value.day > maxDayInMonth ? maxDayInMonth : value.day;
+    return DateTime(targetYear, value.month, safeDay);
+  }
+
+  DateTime? _parseDateInput(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final dayFirstMatch = RegExp(
+      r'^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$',
+    ).firstMatch(trimmed);
+    if (dayFirstMatch != null) {
+      final day = int.tryParse(dayFirstMatch.group(1) ?? '');
+      final month = int.tryParse(dayFirstMatch.group(2) ?? '');
+      final rawYear = dayFirstMatch.group(3) ?? '';
+      final year = int.tryParse(rawYear);
+      if (day == null || month == null || year == null) {
+        return null;
+      }
+      final normalizedYear = rawYear.length == 2
+          ? (year >= 70 ? 1900 + year : 2000 + year)
+          : year;
+      final date = DateTime(normalizedYear, month, day);
+      if (date.day == day &&
+          date.month == month &&
+          date.year == normalizedYear) {
+        return date;
+      }
+      return null;
+    }
+
+    final yearFirstMatch = RegExp(
+      r'^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$',
+    ).firstMatch(trimmed);
+    if (yearFirstMatch != null) {
+      final year = int.tryParse(yearFirstMatch.group(1) ?? '');
+      final month = int.tryParse(yearFirstMatch.group(2) ?? '');
+      final day = int.tryParse(yearFirstMatch.group(3) ?? '');
+      if (day == null || month == null || year == null) {
+        return null;
+      }
+      final date = DateTime(year, month, day);
+      if (date.day == day && date.month == month && date.year == year) {
+        return date;
+      }
+      return null;
+    }
+
+    return DateTime.tryParse(trimmed);
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   void _submitKta() async {
     if (_formKey.currentState!.validate()) {
       if (_uploadedKtaImage == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Silakan upload KTA terlebih dahulu!'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final memberNumber = _noAnggotaController.text.trim().replaceAll(
+        RegExp(r'\s+'),
+        '',
+      );
+      _noAnggotaController.text = memberNumber;
+      final validUntil = _parseDateInput(_validUntilController.text);
+      final validFrom = _parseDateInput(_validFromController.text);
+      if (validUntil == null || validFrom == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tanggal berlaku belum valid.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final expectedValidFrom = _subtractOneYear(validUntil);
+      if (!_isSameDate(validFrom, expectedValidFrom)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Berlaku Dari harus 1 tahun sebelum Berlaku Sampai '
+              '(${_formatLocalDate(expectedValidFrom)}).',
+            ),
             backgroundColor: Colors.red,
           ),
         );
@@ -241,15 +417,15 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
       }
 
       try {
-        await Supabase.instance.client.from('kta_applications').insert({
-          'user_id': userId,
-          'confirmed_name': confirmedName.trim(),
-          'confirmed_birth_place': 'Tidak diketahui',
-          'confirmed_birth_date': birthDate.toIso8601String().split('T').first,
-          'confirmed_address': 'Tidak tersedia',
-          'kta_photo_url': ktaUrl,
-          'status': 'pending',
-        });
+        await _insertKtaApplication(
+          userId: userId,
+          confirmedName: confirmedName.trim(),
+          birthDate: birthDate,
+          ktaUrl: ktaUrl,
+          memberNumber: memberNumber,
+          validFrom: validFrom,
+          validUntil: validUntil,
+        );
       } catch (e) {
         debugPrint('KTA insert failed: $e');
         if (!mounted) return;
@@ -267,7 +443,10 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
 
       userData.ktaStatus = 'pending';
       userData.ktaImagePath = _uploadedKtaImage!;
-      userData.membershipNumber = _noAnggotaController.text.trim();
+      userData.membershipNumber = memberNumber;
+      userData.memberNumber = memberNumber;
+      userData.membershipValidFrom = _formatLocalDate(validFrom);
+      userData.membershipValidUntil = _formatLocalDate(validUntil);
       await userData.saveData();
 
       if (!mounted) return;
@@ -278,6 +457,65 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
         ),
       );
     }
+  }
+
+  Future<void> _insertKtaApplication({
+    required String userId,
+    required String confirmedName,
+    required DateTime birthDate,
+    required String ktaUrl,
+    required String memberNumber,
+    required DateTime validFrom,
+    required DateTime validUntil,
+  }) async {
+    final payload = <String, dynamic>{
+      'user_id': userId,
+      'confirmed_name': confirmedName,
+      'confirmed_birth_place': 'Tidak diketahui',
+      'confirmed_birth_date': birthDate.toIso8601String().split('T').first,
+      'confirmed_address': 'Tidak tersedia',
+      'kta_photo_url': ktaUrl,
+      'status': 'pending',
+      // Preferred schema for requested correction data on kta_applications.
+      'member_number': memberNumber,
+      'kta_valid_from': validFrom.toIso8601String().split('T').first,
+      'kta_valid_until': validUntil.toIso8601String().split('T').first,
+    };
+
+    var attempts = 0;
+    while (true) {
+      try {
+        await Supabase.instance.client.from('kta_applications').insert(payload);
+        return;
+      } catch (e) {
+        attempts += 1;
+        final missingColumn = _extractMissingColumnFromError(e.toString());
+        if (missingColumn == null ||
+            !payload.containsKey(missingColumn) ||
+            attempts > 6) {
+          rethrow;
+        }
+        payload.remove(missingColumn);
+      }
+    }
+  }
+
+  String? _extractMissingColumnFromError(String error) {
+    final postgrestPattern = RegExp(r"Could not find the '([^']+)' column");
+    final postgrestMatch = postgrestPattern.firstMatch(error);
+    if (postgrestMatch != null) {
+      return postgrestMatch.group(1);
+    }
+
+    final postgresPattern = RegExp(
+      r'column "([^"]+)" of relation "kta_applications" does not exist',
+      caseSensitive: false,
+    );
+    final postgresMatch = postgresPattern.firstMatch(error);
+    if (postgresMatch != null) {
+      return postgresMatch.group(1);
+    }
+    return null;
   }
 
   Future<bool> _ensureUserProfile(String userId, UserData userData) async {
@@ -641,9 +879,11 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
                                         right: 12,
                                         child: GestureDetector(
                                           onTap: () {
-                                            setState(
-                                              () => _uploadedKtaImage = null,
-                                            );
+                                            setState(() {
+                                              _uploadedKtaImage = null;
+                                              _isExtractingOcr = false;
+                                              _ocrStatusMessage = '';
+                                            });
                                           },
                                           child: Container(
                                             padding: const EdgeInsets.all(6),
@@ -673,6 +913,54 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
                       ),
                     ),
                     const SizedBox(height: 28),
+                    if (_isExtractingOcr || _ocrStatusMessage.isNotEmpty) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFBBF7D0)),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (_isExtractingOcr)
+                              const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF059669),
+                                ),
+                              )
+                            else
+                              const Icon(
+                                Icons.fact_check_outlined,
+                                color: Color(0xFF059669),
+                                size: 18,
+                              ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _isExtractingOcr
+                                    ? 'Membaca teks pada foto KTA...'
+                                    : _ocrStatusMessage,
+                                style: const TextStyle(
+                                  color: Color(0xFF065F46),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                     // No Anggota Input
                     Row(
                       children: [
@@ -737,8 +1025,180 @@ class _UploadKtaScreenState extends State<UploadKtaScreen> {
                         ),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
+                        final memberNumber = value?.trim() ?? '';
+                        if (memberNumber.isEmpty) {
                           return 'Nomor anggota wajib diisi';
+                        }
+                        final normalized = memberNumber.replaceAll(
+                          RegExp(r'\s+'),
+                          '',
+                        );
+                        if (!RegExp(
+                          r'^[A-Za-z0-9-]{6,20}$',
+                        ).hasMatch(normalized)) {
+                          return 'Nomor anggota tidak valid';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    // Valid Until Input
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.event_available_outlined,
+                            color: Color(0xFF10B982),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          "Berlaku Sampai",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _validUntilController,
+                      keyboardType: TextInputType.datetime,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                      ),
+                      onChanged: (_) => _deriveValidFromFromUntil(),
+                      decoration: InputDecoration(
+                        hintText: 'DD/MM/YYYY',
+                        hintStyle: TextStyle(color: Colors.grey[400]),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        prefixIcon: const Icon(
+                          Icons.event,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                        suffixIcon: IconButton(
+                          tooltip: 'Isi Berlaku Dari otomatis',
+                          onPressed: () =>
+                              _deriveValidFromFromUntil(force: true),
+                          icon: const Icon(
+                            Icons.auto_fix_high_rounded,
+                            color: Color(0xFF059669),
+                          ),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[200]!),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[200]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF10B982),
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 18,
+                        ),
+                      ),
+                      validator: (value) {
+                        final parsed = _parseDateInput(value ?? '');
+                        if (parsed == null) {
+                          return 'Tanggal berlaku sampai wajib diisi (DD/MM/YYYY)';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Berlaku Dari harus 1 tahun sebelum tanggal ini.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 20),
+                    // Valid From Input
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFECFDF5),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Icon(
+                            Icons.event_note_outlined,
+                            color: Color(0xFF10B982),
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          "Berlaku Dari",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.grey[800],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _validFromController,
+                      keyboardType: TextInputType.datetime,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 15,
+                      ),
+                      onChanged: (_) {
+                        _validFromAutoFilled = false;
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'DD/MM/YYYY',
+                        hintStyle: TextStyle(color: Colors.grey[400]),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        prefixIcon: const Icon(
+                          Icons.date_range,
+                          color: Color(0xFF9CA3AF),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[200]!),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[200]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF10B982),
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 18,
+                        ),
+                      ),
+                      validator: (value) {
+                        final parsed = _parseDateInput(value ?? '');
+                        if (parsed == null) {
+                          return 'Tanggal berlaku dari wajib diisi (DD/MM/YYYY)';
                         }
                         return null;
                       },

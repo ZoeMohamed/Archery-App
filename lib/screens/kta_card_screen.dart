@@ -55,6 +55,10 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
     }
 
     try {
+      String? preferredMemberNumber;
+      DateTime? preferredValidFrom;
+      DateTime? preferredValidUntil;
+
       final userResponse = await Supabase.instance.client
           .from('users')
           .select(
@@ -66,9 +70,7 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
       if (userResponse != null) {
         final memberNumber = userResponse['member_number']?.toString() ?? '';
         if (memberNumber.isNotEmpty) {
-          _ktaNumber = memberNumber;
-          userData.memberNumber = memberNumber;
-          userData.membershipNumber = memberNumber;
+          preferredMemberNumber = memberNumber;
         }
 
         final ktaPhotoUrl = userResponse['kta_photo_url']?.toString() ?? '';
@@ -79,27 +81,78 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
         final validFromRaw = userResponse['kta_valid_from']?.toString() ?? '';
         final validUntilRaw = userResponse['kta_valid_until']?.toString() ?? '';
         final issuedRaw = userResponse['kta_issued_date']?.toString() ?? '';
-        final validFrom =
+        preferredValidFrom =
             _parseSupabaseDate(validFromRaw) ?? _parseSupabaseDate(issuedRaw);
-        final validUntil = _parseSupabaseDate(validUntilRaw);
-        if (_applyValidityDates(validFrom, validUntil)) {
-          // Supabase validity data applied.
-        }
+        preferredValidUntil = _parseSupabaseDate(validUntilRaw);
       }
 
-      final paymentService = SupabasePaymentService();
-      final payments = await paymentService.fetchMonthlyPaymentsForUser(userId);
-      final latestPaid = _latestEligiblePayment(payments);
-      if (latestPaid != null) {
-        final paidDate = _normalizeDate(
-          latestPaid.verifiedAt ??
-              latestPaid.createdAt ??
-              latestPaid.paymentMonth,
+      // Prefer latest approved KTA application correction data when available.
+      // This ensures number/date on digital card follows physical KTA.
+      try {
+        final latestApprovedApplication = await Supabase.instance.client
+            .from('kta_applications')
+            .select('member_number, kta_valid_from, kta_valid_until')
+            .eq('user_id', userId)
+            .eq('status', 'approved')
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+        if (latestApprovedApplication != null) {
+          final correctedMemberNumber =
+              latestApprovedApplication['member_number']?.toString().trim() ??
+              '';
+          if (correctedMemberNumber.isNotEmpty) {
+            preferredMemberNumber = correctedMemberNumber;
+          }
+
+          final correctedValidFrom = _parseSupabaseDate(
+            latestApprovedApplication['kta_valid_from']?.toString() ?? '',
+          );
+          final correctedValidUntil = _parseSupabaseDate(
+            latestApprovedApplication['kta_valid_until']?.toString() ?? '',
+          );
+
+          if (correctedValidUntil != null || correctedValidFrom != null) {
+            preferredValidFrom = correctedValidFrom;
+            preferredValidUntil = correctedValidUntil;
+          }
+        }
+      } catch (_) {
+        // Ignore if kta_applications correction columns are not available yet.
+      }
+
+      if (preferredMemberNumber != null && preferredMemberNumber.isNotEmpty) {
+        _ktaNumber = preferredMemberNumber;
+        userData.memberNumber = preferredMemberNumber;
+        userData.membershipNumber = preferredMemberNumber;
+      }
+
+      if (preferredValidUntil != null && preferredValidFrom == null) {
+        preferredValidFrom = _subtractOneYear(preferredValidUntil);
+      }
+      final hasValidityFromKta = _applyValidityDates(
+        preferredValidFrom,
+        preferredValidUntil,
+      );
+
+      // Fallback to payment-derived validity only when KTA validity is missing.
+      if (!hasValidityFromKta) {
+        final paymentService = SupabasePaymentService();
+        final payments = await paymentService.fetchMonthlyPaymentsForUser(
+          userId,
         );
-        if (paidDate != null) {
-          final validUntil = _addMonth(paidDate);
-          _validFrom = _formatDate(paidDate);
-          _validUntil = _formatDate(validUntil);
+        final latestPaid = _latestEligiblePayment(payments);
+        if (latestPaid != null) {
+          final paidDate = _normalizeDate(
+            latestPaid.verifiedAt ??
+                latestPaid.createdAt ??
+                latestPaid.paymentMonth,
+          );
+          if (paidDate != null) {
+            final validUntil = _addMonth(paidDate);
+            _validFrom = _formatDate(paidDate);
+            _validUntil = _formatDate(validUntil);
+          }
         }
       }
 
@@ -283,6 +336,13 @@ class _KtaCardScreenState extends State<KtaCardScreen> {
     final lastDay = DateTime(nextMonth.year, nextMonth.month + 1, 0).day;
     final day = value.day > lastDay ? lastDay : value.day;
     return DateTime(nextMonth.year, nextMonth.month, day);
+  }
+
+  DateTime _subtractOneYear(DateTime value) {
+    final targetYear = value.year - 1;
+    final maxDayInMonth = DateTime(targetYear, value.month + 1, 0).day;
+    final safeDay = value.day > maxDayInMonth ? maxDayInMonth : value.day;
+    return DateTime(targetYear, value.month, safeDay);
   }
 
   DateTime? _parseSupabaseDate(String raw) {

@@ -196,6 +196,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
       case 'coach':
         return key != 'pembayaran';
       case 'staff':
+      case 'pengurus':
         return key == 'lomba' || key == 'pembayaran';
       case 'member':
         return true;
@@ -471,7 +472,7 @@ class _DashboardNonMemberState extends State<DashboardNonMember> {
                       subtitle: 'Ukur jarak target',
                       color: const Color(0xFFEF4444),
                       iconColor: Colors.white,
-                      isLocked: false,
+                      isLocked: !_canAccessMenu('range_finder'),
                     ),
                     // Member-only features (locked for non-members)
                     _buildMenuItem(

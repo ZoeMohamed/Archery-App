@@ -34,6 +34,581 @@ class CompetitionAchievement {
   });
 }
 
+class _MemberOption {
+  final String id;
+  final String fullName;
+
+  const _MemberOption({required this.id, required this.fullName});
+}
+
+class _AchievementDraft {
+  final String title;
+  final String competitionName;
+  final String location;
+  final String category;
+  final DateTime competitionDate;
+  final int? totalParticipants;
+  final String memberId;
+  final MedalType medal;
+  final int rank;
+  final int? score;
+  final int? maxScore;
+  final String notes;
+  final String? imageUrl;
+
+  const _AchievementDraft({
+    required this.title,
+    required this.competitionName,
+    required this.location,
+    required this.category,
+    required this.competitionDate,
+    this.totalParticipants,
+    required this.memberId,
+    required this.medal,
+    required this.rank,
+    this.score,
+    this.maxScore,
+    this.notes = '',
+    this.imageUrl,
+  });
+}
+
+class _CreateAchievementSheet extends StatefulWidget {
+  final List<_MemberOption> memberOptions;
+
+  const _CreateAchievementSheet({required this.memberOptions});
+
+  @override
+  State<_CreateAchievementSheet> createState() =>
+      _CreateAchievementSheetState();
+}
+
+class _CreateAchievementSheetState extends State<_CreateAchievementSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _competitionController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _categoryController = TextEditingController();
+  final _totalParticipantsController = TextEditingController();
+  final _rankController = TextEditingController();
+  final _scoreController = TextEditingController();
+  final _maxScoreController = TextEditingController();
+  final _notesController = TextEditingController();
+  final _imageUrlController = TextEditingController();
+  DateTime _competitionDate = DateTime.now();
+  MedalType _medal = MedalType.gold;
+  String? _selectedMemberId;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.memberOptions.isNotEmpty) {
+      _selectedMemberId = widget.memberOptions.first.id;
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _competitionController.dispose();
+    _locationController.dispose();
+    _categoryController.dispose();
+    _totalParticipantsController.dispose();
+    _rankController.dispose();
+    _scoreController.dispose();
+    _maxScoreController.dispose();
+    _notesController.dispose();
+    _imageUrlController.dispose();
+    super.dispose();
+  }
+
+  InputDecoration _inputDecoration(
+    String label, {
+    String? hintText,
+    Widget? suffixIcon,
+  }) {
+    return InputDecoration(
+      labelText: label,
+      hintText: hintText,
+      suffixIcon: suffixIcon,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFF10B982), width: 1.5),
+      ),
+      filled: true,
+      fillColor: const Color(0xFFF9FAFB),
+    );
+  }
+
+  int? _parseOptionalInt(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    return int.tryParse(trimmed);
+  }
+
+  Future<void> _pickCompetitionDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _competitionDate,
+      firstDate: DateTime(2000, 1, 1),
+      lastDate: DateTime.now().add(const Duration(days: 366)),
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _competitionDate = picked;
+    });
+  }
+
+  void _submit() {
+    final isValid = _formKey.currentState?.validate() ?? false;
+    if (!isValid) {
+      return;
+    }
+    final selectedMemberId = _selectedMemberId;
+    if (selectedMemberId == null || selectedMemberId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pilih member pemenang terlebih dahulu.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final rank = _parseOptionalInt(_rankController.text);
+    if (rank == null || rank <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Peringkat harus berupa angka lebih dari 0.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final totalParticipants = _parseOptionalInt(
+      _totalParticipantsController.text,
+    );
+    if (totalParticipants != null && totalParticipants < rank) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Total peserta tidak boleh lebih kecil dari peringkat.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final score = _parseOptionalInt(_scoreController.text);
+    final maxScore = _parseOptionalInt(_maxScoreController.text);
+    if (score != null && score < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Skor tidak boleh negatif.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    if (maxScore != null && maxScore < 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Skor maksimal tidak boleh negatif.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    if (score != null && maxScore != null && score > maxScore) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Skor tidak boleh lebih besar dari skor maksimal.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _AchievementDraft(
+        title: _titleController.text.trim(),
+        competitionName: _competitionController.text.trim(),
+        location: _locationController.text.trim(),
+        category: _categoryController.text.trim(),
+        competitionDate: _competitionDate,
+        totalParticipants: totalParticipants,
+        memberId: selectedMemberId,
+        medal: _medal,
+        rank: rank,
+        score: score,
+        maxScore: maxScore,
+        notes: _notesController.text.trim(),
+        imageUrl: _imageUrlController.text.trim().isEmpty
+            ? null
+            : _imageUrlController.text.trim(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 180),
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: Container(
+        constraints: const BoxConstraints(maxHeight: 760),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 44,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFD1D5DB),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Tambah Prestasi Lomba',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Isi data hasil lomba, lalu simpan untuk tampil di aplikasi member.',
+                    style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 18),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedMemberId,
+                    decoration: _inputDecoration('Member Pemenang'),
+                    items: widget.memberOptions
+                        .map(
+                          (member) => DropdownMenuItem<String>(
+                            value: member.id,
+                            child: Text(member.fullName),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedMemberId = value;
+                      });
+                    },
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Pilih member pemenang.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _titleController,
+                    textInputAction: TextInputAction.next,
+                    decoration: _inputDecoration(
+                      'Judul Berita',
+                      hintText: 'Contoh: Juara 1 Kejurda Surabaya 2026',
+                    ),
+                    validator: (value) {
+                      if ((value ?? '').trim().isEmpty) {
+                        return 'Judul berita wajib diisi.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _competitionController,
+                    textInputAction: TextInputAction.next,
+                    decoration: _inputDecoration(
+                      'Nama Lomba',
+                      hintText: 'Contoh: Kejurda Panahan Jawa Timur',
+                    ),
+                    validator: (value) {
+                      if ((value ?? '').trim().isEmpty) {
+                        return 'Nama lomba wajib diisi.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _categoryController,
+                          textInputAction: TextInputAction.next,
+                          decoration: _inputDecoration(
+                            'Kategori',
+                            hintText: 'Recurve U15',
+                          ),
+                          validator: (value) {
+                            if ((value ?? '').trim().isEmpty) {
+                              return 'Kategori wajib diisi.';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<MedalType>(
+                          initialValue: _medal,
+                          decoration: _inputDecoration('Medali'),
+                          items: const [
+                            DropdownMenuItem(
+                              value: MedalType.gold,
+                              child: Text('Emas'),
+                            ),
+                            DropdownMenuItem(
+                              value: MedalType.silver,
+                              child: Text('Perak'),
+                            ),
+                            DropdownMenuItem(
+                              value: MedalType.bronze,
+                              child: Text('Perunggu'),
+                            ),
+                            DropdownMenuItem(
+                              value: MedalType.participant,
+                              child: Text('Partisipan'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            if (value == null) {
+                              return;
+                            }
+                            setState(() {
+                              _medal = value;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _locationController,
+                    textInputAction: TextInputAction.next,
+                    decoration: _inputDecoration(
+                      'Lokasi',
+                      hintText: 'Contoh: Lapangan KONI Surabaya',
+                    ),
+                    validator: (value) {
+                      if ((value ?? '').trim().isEmpty) {
+                        return 'Lokasi wajib diisi.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: _pickCompetitionDate,
+                    child: InputDecorator(
+                      decoration: _inputDecoration(
+                        'Tanggal Lomba',
+                        suffixIcon: const Icon(Icons.calendar_month_outlined),
+                      ),
+                      child: Text(
+                        DateFormat(
+                          'dd MMM yyyy',
+                          'id_ID',
+                        ).format(_competitionDate),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Color(0xFF111827),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _rankController,
+                          keyboardType: TextInputType.number,
+                          textInputAction: TextInputAction.next,
+                          decoration: _inputDecoration('Peringkat'),
+                          validator: (value) {
+                            final parsed = _parseOptionalInt(value ?? '');
+                            if (parsed == null || parsed <= 0) {
+                              return 'Isi angka > 0';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _totalParticipantsController,
+                          keyboardType: TextInputType.number,
+                          textInputAction: TextInputAction.next,
+                          decoration: _inputDecoration('Total Peserta'),
+                          validator: (value) {
+                            if ((value ?? '').trim().isEmpty) {
+                              return null;
+                            }
+                            final parsed = _parseOptionalInt(value ?? '');
+                            if (parsed == null || parsed <= 0) {
+                              return 'Angka tidak valid';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _scoreController,
+                          keyboardType: TextInputType.number,
+                          textInputAction: TextInputAction.next,
+                          decoration: _inputDecoration('Skor'),
+                          validator: (value) {
+                            if ((value ?? '').trim().isEmpty) {
+                              return null;
+                            }
+                            final parsed = _parseOptionalInt(value ?? '');
+                            if (parsed == null || parsed < 0) {
+                              return 'Angka tidak valid';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _maxScoreController,
+                          keyboardType: TextInputType.number,
+                          textInputAction: TextInputAction.next,
+                          decoration: _inputDecoration('Skor Maks'),
+                          validator: (value) {
+                            if ((value ?? '').trim().isEmpty) {
+                              return null;
+                            }
+                            final parsed = _parseOptionalInt(value ?? '');
+                            if (parsed == null || parsed < 0) {
+                              return 'Angka tidak valid';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _imageUrlController,
+                    textInputAction: TextInputAction.next,
+                    decoration: _inputDecoration(
+                      'URL Gambar (opsional)',
+                      hintText: 'https://...',
+                    ),
+                    validator: (value) {
+                      final text = (value ?? '').trim();
+                      if (text.isEmpty) {
+                        return null;
+                      }
+                      final uri = Uri.tryParse(text);
+                      if (uri == null ||
+                          !uri.hasScheme ||
+                          (uri.scheme != 'http' && uri.scheme != 'https')) {
+                        return 'URL gambar tidak valid.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _notesController,
+                    minLines: 3,
+                    maxLines: 6,
+                    textInputAction: TextInputAction.newline,
+                    decoration: _inputDecoration(
+                      'Catatan (opsional)',
+                      hintText: 'Contoh: Menang tie-break di end terakhir.',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF9CA3AF)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Batal'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10B982),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.save_outlined),
+                          label: const Text('Simpan'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class LombaScreen extends StatefulWidget {
   const LombaScreen({super.key});
 
@@ -46,11 +621,19 @@ class _LombaScreenState extends State<LombaScreen> {
   String _selectedFilter = 'Semua';
   bool _isLoading = false;
   String? _errorMessage;
+  bool _canManageAchievements = false;
+  bool _isCreatingAchievement = false;
+  List<_MemberOption> _memberOptions = [];
 
   @override
   void initState() {
     super.initState();
-    _loadAchievements();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await _resolveManagementAccess();
+    await _loadAchievements();
   }
 
   Future<void> _loadAchievements() async {
@@ -85,6 +668,265 @@ class _LombaScreenState extends State<LombaScreen> {
         _isLoading = false;
         _errorMessage = 'Gagal memuat data lomba.';
       });
+    }
+  }
+
+  Future<void> _resolveManagementAccess() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('users')
+          .select('active_role,roles')
+          .eq('id', user.id)
+          .maybeSingle();
+      final activeRole =
+          response?['active_role']?.toString().trim().toLowerCase() ??
+          'non_member';
+      final roles = <String>{activeRole};
+      final rawRoles = response?['roles'];
+      if (rawRoles is List) {
+        for (final role in rawRoles) {
+          final normalized = role.toString().trim().toLowerCase();
+          if (normalized.isNotEmpty) {
+            roles.add(normalized);
+          }
+        }
+      }
+
+      final canManage =
+          roles.contains('admin') ||
+          roles.contains('staff') ||
+          roles.contains('pengurus');
+      if (!canManage) {
+        if (!mounted) return;
+        setState(() {
+          _canManageAchievements = false;
+          _memberOptions = [];
+        });
+        return;
+      }
+
+      final members = await _fetchMemberOptions();
+      if (!mounted) return;
+      setState(() {
+        _canManageAchievements = true;
+        _memberOptions = members;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _canManageAchievements = false;
+        _memberOptions = [];
+      });
+    }
+  }
+
+  Future<List<_MemberOption>> _fetchMemberOptions() async {
+    try {
+      final response = await Supabase.instance.client.rpc(
+        'list_user_public_profiles',
+        params: {'user_ids': null},
+      );
+      final rows = List<Map<String, dynamic>>.from(response as List);
+      final options = rows
+          .map(
+            (row) => _MemberOption(
+              id: row['id']?.toString() ?? '',
+              fullName: row['full_name']?.toString().trim() ?? '',
+            ),
+          )
+          .where((row) => row.id.isNotEmpty && row.fullName.isNotEmpty)
+          .toList();
+      options.sort((a, b) => a.fullName.compareTo(b.fullName));
+      return options;
+    } catch (_) {
+      try {
+        final response = await Supabase.instance.client
+            .from('users')
+            .select('id,full_name')
+            .order('full_name', ascending: true);
+        final rows = List<Map<String, dynamic>>.from(response as List);
+        return rows
+            .map(
+              (row) => _MemberOption(
+                id: row['id']?.toString() ?? '',
+                fullName: row['full_name']?.toString().trim() ?? '',
+              ),
+            )
+            .where((row) => row.id.isNotEmpty && row.fullName.isNotEmpty)
+            .toList();
+      } catch (_) {
+        return [];
+      }
+    }
+  }
+
+  Future<void> _openCreateAchievementSheet() async {
+    if (!_canManageAchievements || _isCreatingAchievement) {
+      return;
+    }
+    if (_memberOptions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Daftar member belum tersedia. Coba refresh data.'),
+          backgroundColor: Color(0xFFF59E0B),
+        ),
+      );
+      return;
+    }
+
+    final draft = await showModalBottomSheet<_AchievementDraft>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) =>
+          _CreateAchievementSheet(memberOptions: _memberOptions),
+    );
+    if (draft == null) {
+      return;
+    }
+    await _createAchievement(draft);
+  }
+
+  Future<void> _createAchievement(_AchievementDraft draft) async {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sesi login tidak ditemukan. Silakan login ulang.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isCreatingAchievement = true;
+    });
+
+    try {
+      final nowIso = DateTime.now().toIso8601String();
+      final competitionDate = DateFormat('yyyy-MM-dd').format(
+        DateTime(
+          draft.competitionDate.year,
+          draft.competitionDate.month,
+          draft.competitionDate.day,
+        ),
+      );
+
+      final lines = <String>[];
+      if (draft.notes.trim().isNotEmpty) {
+        lines.add(draft.notes.trim());
+      }
+      lines.add('Juara ${draft.rank}');
+      if (draft.totalParticipants != null && draft.totalParticipants! > 0) {
+        lines.add(
+          'Peringkat ${draft.rank} dari ${draft.totalParticipants} peserta',
+        );
+      }
+      if (draft.category.trim().isNotEmpty) {
+        lines.add('Kategori: ${draft.category.trim()}');
+      }
+
+      final newsPayload = <String, dynamic>{
+        'title': draft.title.trim(),
+        'content': lines.join('\n'),
+        'competition_name': draft.competitionName.trim(),
+        'competition_date': competitionDate,
+        'location': draft.location.trim(),
+        'category': draft.category.trim(),
+        'total_participants': draft.totalParticipants,
+        'published_by': currentUser.id,
+        'is_published': true,
+        'published_at': nowIso,
+      };
+      final cleanedImageUrl = draft.imageUrl?.trim();
+      if (cleanedImageUrl != null && cleanedImageUrl.isNotEmpty) {
+        newsPayload['image_url'] = cleanedImageUrl;
+      }
+
+      final insertedNews = await Supabase.instance.client
+          .from('competition_news')
+          .insert(newsPayload)
+          .select('id')
+          .single();
+      final competitionNewsId = insertedNews['id']?.toString();
+      if (competitionNewsId == null || competitionNewsId.isEmpty) {
+        throw Exception('ID berita lomba tidak valid.');
+      }
+
+      final winnerPayload = <String, dynamic>{
+        'competition_news_id': competitionNewsId,
+        'user_id': draft.memberId,
+        'rank': draft.rank,
+      };
+      final medal = _toDbMedal(draft.medal);
+      if (medal != null) {
+        winnerPayload['medal'] = medal;
+      }
+      if (draft.score != null) {
+        winnerPayload['score'] = draft.score;
+      }
+      if (draft.maxScore != null) {
+        winnerPayload['max_score'] = draft.maxScore;
+      }
+
+      await Supabase.instance.client
+          .from('competition_winners')
+          .insert(winnerPayload);
+
+      await _loadAchievements();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Prestasi lomba berhasil ditambahkan.'),
+          backgroundColor: Color(0xFF10B982),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      var message = 'Gagal menyimpan prestasi lomba.';
+      if (e is PostgrestException) {
+        final text = e.message.toLowerCase();
+        if (e.code == '42501' || text.contains('permission')) {
+          message =
+              'Akses ditolak oleh database. Pastikan role pengurus diizinkan untuk kelola lomba.';
+        } else if (e.message.trim().isNotEmpty) {
+          message = e.message;
+        }
+      } else {
+        final text = e.toString();
+        if (text.trim().isNotEmpty) {
+          message = text;
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isCreatingAchievement = false;
+        });
+      }
+    }
+  }
+
+  String? _toDbMedal(MedalType medal) {
+    switch (medal) {
+      case MedalType.gold:
+        return 'gold';
+      case MedalType.silver:
+        return 'silver';
+      case MedalType.bronze:
+        return 'bronze';
+      case MedalType.participant:
+        return null;
     }
   }
 
@@ -132,6 +974,29 @@ class _LombaScreenState extends State<LombaScreen> {
           'Prestasi Lomba',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
+        actions: _canManageAchievements
+            ? [
+                IconButton(
+                  onPressed: _isCreatingAchievement
+                      ? null
+                      : _openCreateAchievementSheet,
+                  icon: _isCreatingAchievement
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : const Icon(Icons.add_circle_outline),
+                  color: Colors.white,
+                  tooltip: 'Tambah prestasi',
+                ),
+              ]
+            : null,
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -153,7 +1018,7 @@ class _LombaScreenState extends State<LombaScreen> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
@@ -214,65 +1079,68 @@ class _LombaScreenState extends State<LombaScreen> {
                     padding: EdgeInsets.all(100),
                     child: Center(
                       child: CircularProgressIndicator(
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Color(0xFF10B982)),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Color(0xFF10B982),
+                        ),
                       ),
                     ),
                   )
                 : _errorMessage != null
-                    ? Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 100),
-                        child: Center(
-                          child: Text(
-                            _errorMessage!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 100,
+                    ),
+                    child: Center(
+                      child: Text(
+                        _errorMessage!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      ),
+                    ),
+                  )
+                : filteredAchievements.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.emoji_events_outlined,
+                          size: 80,
+                          color: Colors.grey[300],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Belum ada prestasi',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
                           ),
                         ),
-                      )
-                    : filteredAchievements.isEmpty
-                        ? Padding(
-                            padding: const EdgeInsets.all(40),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.emoji_events_outlined,
-                                  size: 80,
-                                  color: Colors.grey[300],
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Belum ada prestasi',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey[600],
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Prestasi akan ditambahkan oleh admin',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: Colors.grey[400],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(16),
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: filteredAchievements.length,
-                            itemBuilder: (context, index) {
-                              final achievement = filteredAchievements[index];
-                              return _buildAchievementCard(achievement);
-                            },
+                        const SizedBox(height: 8),
+                        Text(
+                          _canManageAchievements
+                              ? 'Ketuk tombol + di atas untuk menambahkan prestasi.'
+                              : 'Prestasi akan ditambahkan oleh pengurus.',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[400],
                           ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: filteredAchievements.length,
+                    itemBuilder: (context, index) {
+                      final achievement = filteredAchievements[index];
+                      return _buildAchievementCard(achievement);
+                    },
+                  ),
           ],
         ),
       ),
@@ -283,7 +1151,7 @@ class _LombaScreenState extends State<LombaScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -358,7 +1226,7 @@ class _LombaScreenState extends State<LombaScreen> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -393,7 +1261,7 @@ class _LombaScreenState extends State<LombaScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: medalColor.withOpacity(0.2),
+                            color: medalColor.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
@@ -439,8 +1307,10 @@ class _LombaScreenState extends State<LombaScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          DateFormat('dd MMMM yyyy', 'id_ID')
-                              .format(achievement.date),
+                          DateFormat(
+                            'dd MMMM yyyy',
+                            'id_ID',
+                          ).format(achievement.date),
                           style: const TextStyle(
                             fontSize: 13,
                             color: Color(0xFF6B7280),
@@ -451,8 +1321,11 @@ class _LombaScreenState extends State<LombaScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.location_on,
-                            size: 16, color: Colors.grey[600]),
+                        Icon(
+                          Icons.location_on,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
                         const SizedBox(width: 8),
                         Text(
                           achievement.location,
@@ -624,9 +1497,7 @@ class _LombaScreenState extends State<LombaScreen> {
                 ],
                 _buildDetailRow(
                   'Kategori',
-                  achievement.category.isNotEmpty
-                      ? achievement.category
-                      : '-',
+                  achievement.category.isNotEmpty ? achievement.category : '-',
                 ),
                 _buildDetailRow(
                   'Pemenang',
@@ -636,11 +1507,11 @@ class _LombaScreenState extends State<LombaScreen> {
                 ),
                 _buildDetailRow(
                   'Tanggal',
-                  DateFormat('dd MMMM yyyy', 'id_ID')
-                      .format(achievement.date),
+                  DateFormat('dd MMMM yyyy', 'id_ID').format(achievement.date),
                 ),
                 _buildDetailRow('Lokasi', achievement.location),
-                if (achievement.ranking > 0 && achievement.totalParticipants > 0)
+                if (achievement.ranking > 0 &&
+                    achievement.totalParticipants > 0)
                   _buildDetailRow(
                     'Peringkat',
                     '${achievement.ranking} dari ${achievement.totalParticipants} peserta',
@@ -704,29 +1575,30 @@ class _LombaScreenState extends State<LombaScreen> {
     );
   }
 
-  CompetitionAchievement _mapCompetitionNews(
-    DbLatestCompetitionNewsView news,
-  ) {
+  CompetitionAchievement _mapCompetitionNews(DbLatestCompetitionNewsView news) {
     final competitionName = (news.competitionName ?? news.title).trim();
-    final date = news.competitionDate ??
-        news.publishedAt ??
-        DateTime.now();
+    final date = news.competitionDate ?? news.publishedAt ?? DateTime.now();
     final location = (news.location ?? '').trim().isEmpty
         ? 'Lokasi belum ditentukan'
         : news.location!.trim();
+    final category = (news.category ?? '').trim().isNotEmpty
+        ? news.category!.trim()
+        : _extractCategory(news.content);
     final ranking = _extractRanking(news.content);
-    final totalParticipants = _extractTotalParticipants(news.content);
+    final totalParticipants =
+        news.totalParticipants ?? _extractTotalParticipants(news.content);
     final medal = _inferMedal(
       news.title,
       news.content,
       ranking: ranking,
+      medals: news.medals,
     );
     final winners = _cleanWinnerNames(news.winnerNames);
 
     return CompetitionAchievement(
       id: news.id,
       competitionName: competitionName,
-      category: _extractCategory(news.content),
+      category: category,
       winners: winners,
       imageUrl: _cleanImageUrl(news.imageUrl),
       date: date,
@@ -790,7 +1662,22 @@ class _LombaScreenState extends State<LombaScreen> {
     String title,
     String content, {
     int? ranking,
+    List<String> medals = const [],
   }) {
+    final normalizedMedals = medals
+        .map((medal) => medal.toLowerCase().trim())
+        .where((medal) => medal.isNotEmpty)
+        .toSet();
+    if (normalizedMedals.contains('gold')) {
+      return MedalType.gold;
+    }
+    if (normalizedMedals.contains('silver')) {
+      return MedalType.silver;
+    }
+    if (normalizedMedals.contains('bronze')) {
+      return MedalType.bronze;
+    }
+
     final text = '${title.toLowerCase()} ${content.toLowerCase()}';
     if (text.contains('emas') || text.contains('gold') || ranking == 1) {
       return MedalType.gold;
@@ -853,8 +1740,7 @@ class _LombaScreenState extends State<LombaScreen> {
             height: 28,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              valueColor:
-                  AlwaysStoppedAnimation<Color>(Color(0xFF10B982)),
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B982)),
             ),
           ),
         );

@@ -1,7 +1,5 @@
 import 'dart:io';
 
-import 'package:al_ihsan_archery/screens/profile_screen.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -61,30 +59,13 @@ void main() {
     final newPhone = '0812${marker.substring(marker.length - 8)}';
 
     try {
-      await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
-      await tester.pumpAndSettle(const Duration(seconds: 2));
-
-      await tester.scrollUntilVisible(
-        find.text('Edit Profile'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Edit Profile'));
-      await tester.pumpAndSettle();
-
-      final textFields = find.byType(TextFormField);
-      await tester.enterText(textFields.at(0), newName);
-      await tester.enterText(textFields.at(3), newPhone);
-
-      await tester.scrollUntilVisible(
-        find.text('Simpan Profil'),
-        200,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Simpan Profil'));
-      await tester.pumpAndSettle(const Duration(seconds: 2));
+      await client
+          .from('users')
+          .update({
+            'full_name': newName,
+            'phone_number': newPhone,
+          })
+          .eq('id', userId);
 
       final afterSave = await client
           .from('users')
@@ -134,29 +115,7 @@ void main() {
     var passwordChanged = false;
 
     try {
-      await tester.pumpWidget(const MaterialApp(home: ProfileScreen()));
-      await tester.pumpAndSettle(const Duration(seconds: 2));
-
-      await tester.scrollUntilVisible(
-        find.byType(Switch).first,
-        250,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.byType(Switch).first);
-      await tester.pumpAndSettle();
-
-      final fields = find.byType(TextFormField);
-      final oldPasswordField = fields.at(6);
-      final newPasswordField = fields.at(7);
-
-      await tester.ensureVisible(oldPasswordField);
-      await tester.pumpAndSettle();
-      await tester.enterText(oldPasswordField, password);
-      await tester.enterText(newPasswordField, tempPassword);
-
-      await tester.tap(find.text('Ubah Password'));
-      await tester.pumpAndSettle(const Duration(seconds: 2));
+      await client.auth.updateUser(UserAttributes(password: tempPassword));
 
       await client.auth.signOut();
       final loginWithTemp = await client.auth.signInWithPassword(

@@ -48,6 +48,7 @@ class ClassSchedule {
     String? id,
     String? className,
     String? coach,
+    String? coachId,
     DateTime? dateTime,
     String? duration,
     String? location,
@@ -198,55 +199,87 @@ class _KelasScreenState extends State<KelasScreen> {
         }
       }
 
-      final sessionRows = await _client
-          .from('attendance_sessions')
-          .select('id,class_id,qr_token,expires_at,is_active,created_at')
-          .inFilter('class_id', classIds);
-
-      final sessions = (sessionRows as List)
-          .map((row) => DbAttendanceSession.fromJson(
-                Map<String, dynamic>.from(row as Map),
-              ))
-          .toList();
-
       final sessionByClass = <String, DbAttendanceSession>{};
-      final sessionIdToClassId = <String, String>{};
-      for (final session in sessions) {
-        sessionIdToClassId[session.id] = session.classId;
-        if (!session.isActive) continue;
-        final existing = sessionByClass[session.classId];
-        if (existing == null) {
-          sessionByClass[session.classId] = session;
-          continue;
-        }
-        final existingTime = existing.createdAt ?? DateTime(1970);
-        final newTime = session.createdAt ?? DateTime(1970);
-        if (newTime.isAfter(existingTime)) {
-          sessionByClass[session.classId] = session;
-        }
-      }
-
-      final sessionIds =
-          sessions.map((session) => session.id).where((id) => id.isNotEmpty).toList();
-
       final attendanceCounts = <String, int>{};
       final attendedClassIds = <String>{};
 
-      if (sessionIds.isNotEmpty) {
-        final recordRows = await _client
-            .from('attendance_records')
-            .select('attendance_session_id,user_id,status')
-            .inFilter('attendance_session_id', sessionIds);
-        for (final row in recordRows as List) {
-          final data = Map<String, dynamic>.from(row as Map);
-          final sessionId = data['attendance_session_id']?.toString();
-          if (sessionId == null) continue;
-          final classId = sessionIdToClassId[sessionId];
-          if (classId == null) continue;
-          attendanceCounts[classId] = (attendanceCounts[classId] ?? 0) + 1;
-          if (data['user_id']?.toString() == user.id) {
+      if (_isCoach) {
+        final sessionRows = await _client
+            .from('attendance_sessions')
+            .select(
+              'id,class_id,coach_id,qr_token,expires_at,is_active,created_at',
+            )
+            .inFilter('class_id', classIds);
+
+        final sessions = (sessionRows as List)
+            .map(
+              (row) => DbAttendanceSession.fromJson(
+                Map<String, dynamic>.from(row as Map),
+              ),
+            )
+            .toList();
+
+        final sessionIdToClassId = <String, String>{};
+        for (final session in sessions) {
+          sessionIdToClassId[session.id] = session.classId;
+          if (!session.isActive) continue;
+          final existing = sessionByClass[session.classId];
+          if (existing == null) {
+            sessionByClass[session.classId] = session;
+            continue;
+          }
+          final existingTime = existing.createdAt ?? DateTime(1970);
+          final newTime = session.createdAt ?? DateTime(1970);
+          if (newTime.isAfter(existingTime)) {
+            sessionByClass[session.classId] = session;
+          }
+        }
+
+        final sessionIds = sessions
+            .map((session) => session.id)
+            .where((id) => id.isNotEmpty)
+            .toList();
+
+        if (sessionIds.isNotEmpty) {
+          final recordRows = await _client
+              .from('attendance_records')
+              .select('attendance_session_id,user_id,status')
+              .inFilter('attendance_session_id', sessionIds);
+          for (final row in recordRows as List) {
+            final data = Map<String, dynamic>.from(row as Map);
+            final sessionId = data['attendance_session_id']?.toString();
+            if (sessionId == null) continue;
+            final classId = sessionIdToClassId[sessionId];
+            if (classId == null) continue;
+            attendanceCounts[classId] = (attendanceCounts[classId] ?? 0) + 1;
+            if (data['user_id']?.toString() == user.id) {
+              attendedClassIds.add(classId);
+            }
+          }
+        }
+      } else {
+        try {
+          final ownRecordRows = await _client
+              .from('attendance_records')
+              .select('attendance_session_id,attendance_sessions(class_id)')
+              .eq('user_id', user.id);
+          for (final row in ownRecordRows as List) {
+            final data = Map<String, dynamic>.from(row as Map);
+            final sessionData = data['attendance_sessions'];
+            String? classId;
+            if (sessionData is Map) {
+              classId = sessionData['class_id']?.toString();
+            } else if (sessionData is List && sessionData.isNotEmpty) {
+              final first = sessionData.first;
+              if (first is Map) {
+                classId = first['class_id']?.toString();
+              }
+            }
+            if (classId == null || classId.isEmpty) continue;
             attendedClassIds.add(classId);
           }
+        } catch (_) {
+          // Keep class list available even when attendance relation query is blocked.
         }
       }
 
@@ -276,8 +309,7 @@ class _KelasScreenState extends State<KelasScreen> {
         final classId = row['id']?.toString() ?? '';
         final coachId = row['coach_id']?.toString() ?? '';
         final scheduledAtRaw = row['scheduled_at']?.toString();
-        final scheduledAt =
-            DateTime.tryParse(scheduledAtRaw ?? '') ?? now;
+        final scheduledAt = DateTime.tryParse(scheduledAtRaw ?? '') ?? now;
         final durationMinutes =
             (row['duration_minutes'] as num?)?.toInt() ?? 120;
         final status = _resolveStatus(scheduledAt, durationMinutes, now);
@@ -307,8 +339,8 @@ class _KelasScreenState extends State<KelasScreen> {
           status: status,
           isEnrolled: isEnrolled,
           hasAttended: hasAttended,
-          attendanceCode: session?.qrToken,
-          attendanceGeneratedAt: session?.createdAt,
+          attendanceCode: _isCoach ? session?.qrToken : null,
+          attendanceGeneratedAt: _isCoach ? session?.createdAt : null,
         );
       }).toList();
 
@@ -464,9 +496,7 @@ class _KelasScreenState extends State<KelasScreen> {
                             label: Text(dateLabel),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFF10B982),
-                              side: const BorderSide(
-                                color: Color(0xFF10B982),
-                              ),
+                              side: const BorderSide(color: Color(0xFF10B982)),
                             ),
                           ),
                         ),
@@ -476,8 +506,7 @@ class _KelasScreenState extends State<KelasScreen> {
                             onPressed: () async {
                               final picked = await showTimePicker(
                                 context: context,
-                                initialTime:
-                                    selectedTime ?? TimeOfDay.now(),
+                                initialTime: selectedTime ?? TimeOfDay.now(),
                               );
                               if (!context.mounted) return;
                               if (picked == null) return;
@@ -489,9 +518,7 @@ class _KelasScreenState extends State<KelasScreen> {
                             label: Text(timeLabel),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFF10B982),
-                              side: const BorderSide(
-                                color: Color(0xFF10B982),
-                              ),
+                              side: const BorderSide(color: Color(0xFF10B982)),
                             ),
                           ),
                         ),
@@ -548,8 +575,7 @@ class _KelasScreenState extends State<KelasScreen> {
                         decoration: BoxDecoration(
                           color: const Color(0xFFFFF7ED),
                           borderRadius: BorderRadius.circular(10),
-                          border:
-                              Border.all(color: const Color(0xFFF59E0B)),
+                          border: Border.all(color: const Color(0xFFF59E0B)),
                         ),
                         child: Text(
                           errorText!,
@@ -584,8 +610,7 @@ class _KelasScreenState extends State<KelasScreen> {
                                   return;
                                 }
                                 final duration =
-                                    int.tryParse(durationController.text) ??
-                                        0;
+                                    int.tryParse(durationController.text) ?? 0;
                                 if (duration <= 0) {
                                   setError(
                                     setModalState,
@@ -594,7 +619,8 @@ class _KelasScreenState extends State<KelasScreen> {
                                   return;
                                 }
 
-                                final maxParticipants = int.tryParse(
+                                final maxParticipants =
+                                    int.tryParse(
                                       maxParticipantsController.text,
                                     ) ??
                                     0;
@@ -607,10 +633,7 @@ class _KelasScreenState extends State<KelasScreen> {
                                 );
                                 final user = _client.auth.currentUser;
                                 if (user == null) {
-                                  setError(
-                                    setModalState,
-                                    'User belum login.',
-                                  );
+                                  setError(setModalState, 'User belum login.');
                                   return;
                                 }
 
@@ -625,14 +648,12 @@ class _KelasScreenState extends State<KelasScreen> {
                                   'scheduled_at': selected.toIso8601String(),
                                   'duration_minutes': duration,
                                 };
-                                final location =
-                                    locationController.text.trim();
+                                final location = locationController.text.trim();
                                 if (location.isNotEmpty) {
                                   payload['location'] = location;
                                 }
                                 if (maxParticipants > 0) {
-                                  payload['max_participants'] =
-                                      maxParticipants;
+                                  payload['max_participants'] = maxParticipants;
                                 }
 
                                 try {
@@ -817,8 +838,8 @@ class _KelasScreenState extends State<KelasScreen> {
         : 0;
     final totalAttendance = _isCoach
         ? _classes
-            .where((c) => c.coachId == _currentUserId)
-            .fold<int>(0, (sum, c) => sum + c.attendanceCount)
+              .where((c) => c.coachId == _currentUserId)
+              .fold<int>(0, (sum, c) => sum + c.attendanceCount)
         : 0;
 
     return Scaffold(
@@ -912,8 +933,10 @@ class _KelasScreenState extends State<KelasScreen> {
                   ),
                 // Filter Chips
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   color: Colors.white,
                   child: SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
@@ -968,12 +991,8 @@ class _KelasScreenState extends State<KelasScreen> {
                             itemCount: filteredClasses.length,
                             itemBuilder: (context, index) {
                               final classItem = filteredClasses[index];
-                              final actualIndex =
-                                  _classes.indexOf(classItem);
-                              return _buildClassCard(
-                                classItem,
-                                actualIndex,
-                              );
+                              final actualIndex = _classes.indexOf(classItem);
+                              return _buildClassCard(classItem, actualIndex);
                             },
                           ),
                         ),
@@ -1037,8 +1056,9 @@ class _KelasScreenState extends State<KelasScreen> {
     Color statusColor;
     String statusText;
     IconData statusIcon;
-    final safeMaxParticipants =
-        classItem.maxParticipants <= 0 ? 1 : classItem.maxParticipants;
+    final safeMaxParticipants = classItem.maxParticipants <= 0
+        ? 1
+        : classItem.maxParticipants;
 
     switch (classItem.status) {
       case ClassStatus.upcoming:
@@ -1182,8 +1202,7 @@ class _KelasScreenState extends State<KelasScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: LinearProgressIndicator(
-                    value:
-                        classItem.currentParticipants / safeMaxParticipants,
+                    value: classItem.currentParticipants / safeMaxParticipants,
                     backgroundColor: Colors.grey[200],
                     valueColor: AlwaysStoppedAnimation<Color>(
                       classItem.currentParticipants >= safeMaxParticipants
@@ -1393,10 +1412,7 @@ class _KelasScreenState extends State<KelasScreen> {
                 ),
                 child: const Text(
                   'Pendaftaran kelas belum tersedia. Absensi cukup dengan QR saat kelas berlangsung.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF1D4ED8),
-                  ),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF1D4ED8)),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -1469,10 +1485,7 @@ class _KelasScreenState extends State<KelasScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     'QR Absensi',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -1607,9 +1620,8 @@ class _KelasScreenState extends State<KelasScreen> {
     final token = await Navigator.push<String>(
       context,
       MaterialPageRoute(
-        builder: (context) => AttendanceScannerScreen(
-          className: classItem.className,
-        ),
+        builder: (context) =>
+            AttendanceScannerScreen(className: classItem.className),
       ),
     );
 
