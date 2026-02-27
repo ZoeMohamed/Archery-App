@@ -457,7 +457,7 @@ class _RangeFinderScreenState extends State<RangeFinderScreen> {
                           ),
                           const SizedBox(height: 16),
                           const Text(
-                            'Ukuran Lingkaran di Kamera',
+                            'Preset Lingkaran',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,

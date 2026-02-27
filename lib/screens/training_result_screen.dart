@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../utils/training_data.dart';
 import 'summary_table_screen.dart';
+import 'average_rambahan_table_screen.dart';
 import '../widgets/target_face_input.dart';
 
 class TrainingResultScreen extends StatefulWidget {
@@ -74,6 +75,20 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
               );
             },
           ),
+          if (widget.session.numberOfPlayers >= 2)
+            IconButton(
+              icon: const Icon(Icons.leaderboard, color: Colors.white),
+              tooltip: 'Rata-rata Rambahan',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        AverageRambahanTableScreen(session: widget.session),
+                  ),
+                );
+              },
+            ),
         ],
         bottom: widget.session.numberOfPlayers > 1
             ? TabBar(
