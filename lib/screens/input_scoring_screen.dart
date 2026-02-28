@@ -400,6 +400,35 @@ class _InputScoringScreenState extends State<InputScoringScreen>
           ),
         ),
         centerTitle: true,
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFF10B982), // Hijau lebih gelap
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: const Color(0xFFF5F5F5), // Border hijau lebih gelap lagi
+                width: 2,
+              ),
+            ),
+            child: IconButton(
+              icon: Icon(
+                isKeypadVisible ? Icons.keyboard_hide : Icons.keyboard,
+                color: Colors.white,
+              ),
+              tooltip: isKeypadVisible ? 'Sembunyikan Keypad' : 'Tampilkan Keypad',
+              onPressed: () {
+                setState(() {
+                  isKeypadVisible = !isKeypadVisible;
+                  // Reset position when showing keypad
+                  if (isKeypadVisible) {
+                    keypadTopPosition = 0.0;
+                  }
+                });
+              },
+            ),
+          ),
+        ],
         bottom: session.numberOfPlayers > 1
             ? TabBar(
                 controller: _tabController,
@@ -1111,22 +1140,6 @@ class _InputScoringScreenState extends State<InputScoringScreen>
               ),
             ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          setState(() {
-            isKeypadVisible = !isKeypadVisible;
-            // Reset position when showing keypad
-            if (isKeypadVisible) {
-              keypadTopPosition = 0.0;
-            }
-          });
-        },
-        backgroundColor: const Color(0xFF10B982),
-        child: Icon(
-          isKeypadVisible ? Icons.keyboard_hide : Icons.keyboard,
-          color: Colors.white,
-        ),
       ),
     );
   }
