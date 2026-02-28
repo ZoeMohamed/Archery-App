@@ -19,6 +19,8 @@ BEGIN;
 CREATE OR REPLACE FUNCTION public.update_member_status()
 RETURNS TRIGGER
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
 AS $$
 DECLARE
     target_user_id UUID;
@@ -27,9 +29,17 @@ DECLARE
     new_member_status VARCHAR(20);
 BEGIN
     IF TG_TABLE_NAME = 'payments' THEN
-        target_user_id := NEW.user_id;
+        IF TG_OP = 'DELETE' THEN
+          target_user_id := OLD.user_id;
+        ELSE
+          target_user_id := NEW.user_id;
+        END IF;
     ELSE
-        target_user_id := NEW.id;
+        IF TG_OP = 'DELETE' THEN
+          target_user_id := OLD.id;
+        ELSE
+          target_user_id := NEW.id;
+        END IF;
     END IF;
 
     IF target_user_id IS NULL THEN
@@ -72,7 +82,10 @@ BEGIN
       END;
     END IF;
 
-    -- IMPORTANT: Do NOT touch kta_valid_from/kta_valid_until here.
+    -- IMPORTANT:
+    -- 1) Do NOT touch kta_valid_from/kta_valid_until here.
+    -- 2) SECURITY DEFINER is required because authenticated users are
+    --    intentionally not granted direct UPDATE on users.member_status.
     UPDATE public.users
     SET member_status = new_member_status
     WHERE id = target_user_id
