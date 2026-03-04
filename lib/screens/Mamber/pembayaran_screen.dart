@@ -541,6 +541,10 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
     final subtitle = _isManager
         ? 'Kelola dan verifikasi pembayaran member'
         : 'Rp 100.000';
+    final unpaidSectionMaxHeight =
+        (MediaQuery.of(context).size.height * 0.24)
+            .clamp(120.0, 220.0)
+            .toDouble();
 
     return Container(
       width: double.infinity,
@@ -666,32 +670,40 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
                       textAlign: TextAlign.center,
                     )
                   else
-                    Wrap(
-                      alignment: WrapAlignment.center,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _unpaidMonths
-                          .map(
-                            (month) => Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                _formatUnpaidMonth(month),
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: unpaidSectionMaxHeight,
+                      ),
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _unpaidMonths
+                              .map(
+                                (month) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.18),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    _formatUnpaidMonth(month),
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                          )
-                          .toList(),
+                              )
+                              .toList(),
+                        ),
+                      ),
                     ),
                 ],
               ),
