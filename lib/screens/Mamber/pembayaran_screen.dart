@@ -490,39 +490,49 @@ class _PembayaranScreenState extends State<PembayaranScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          _buildHeaderSummary(
-            displayedCount: displayedPayments.length,
-            totalCount: _paymentHistory.length,
-          ),
-          if (_isManager) _buildManagerFilters(),
-          Expanded(
-            child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF10B982)),
-                  )
-                : _errorMessage != null && _paymentHistory.isEmpty
-                ? _buildErrorState()
-                : displayedPayments.isEmpty
-                ? _buildEmptyState()
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: displayedPayments.length,
-                    itemBuilder: (context, index) {
-                      final payment = displayedPayments[index];
-                      final sourceIndex = _paymentHistory.indexWhere(
-                        (item) => item.id == payment.id,
-                      );
-                      return _buildPaymentCard(
-                        payment,
-                        sourceIndex >= 0 ? sourceIndex : index,
-                      );
-                    },
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFF10B982)),
+            )
+          : _errorMessage != null && _paymentHistory.isEmpty
+          ? _buildErrorState()
+          : CustomScrollView(
+              physics: const BouncingScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _buildHeaderSummary(
+                    displayedCount: displayedPayments.length,
+                    totalCount: _paymentHistory.length,
                   ),
-          ),
-        ],
-      ),
+                ),
+                if (_isManager)
+                  SliverToBoxAdapter(
+                    child: _buildManagerFilters(),
+                  ),
+                displayedPayments.isEmpty
+                    ? SliverFillRemaining(
+                        child: _buildEmptyState(),
+                      )
+                    : SliverPadding(
+                        padding: const EdgeInsets.all(16),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final payment = displayedPayments[index];
+                              final sourceIndex = _paymentHistory.indexWhere(
+                                (item) => item.id == payment.id,
+                              );
+                              return _buildPaymentCard(
+                                payment,
+                                sourceIndex >= 0 ? sourceIndex : index,
+                              );
+                            },
+                            childCount: displayedPayments.length,
+                          ),
+                        ),
+                      ),
+              ],
+            ),
       floatingActionButton: _isManager
           ? null
           : FloatingActionButton(
