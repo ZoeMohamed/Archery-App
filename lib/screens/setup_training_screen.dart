@@ -16,6 +16,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
   String _selectedTarget = 'Default';
   String _inputMethod = 'arrow_values'; // 'arrow_values' or 'target_face'
   final TextEditingController _trainingNameController = TextEditingController();
+  final TextEditingController _distanceController = TextEditingController();
   TrainingTemplate? _selectedTemplate;
   List<TrainingTemplate> _templates = [];
   bool _saveToLog = false; // Opsi simpan ke log latihan
@@ -94,6 +95,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
         _inputMethod,
       );
       _trainingNameController.text = template.name;
+      _distanceController.text = template.distance ?? '';
 
       // Update player controllers
       _updatePlayerControllers(_numberOfPlayers);
@@ -112,6 +114,7 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
   @override
   void dispose() {
     _trainingNameController.dispose();
+    _distanceController.dispose();
     for (var controller in _playerNameControllers) {
       controller.dispose();
     }
@@ -153,6 +156,9 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       arrowsPerRound: _arrowsPerRound,
       targetType: targetValue,
       inputMethod: _inputMethod,
+      distance: _distanceController.text.trim().isNotEmpty
+          ? _distanceController.text.trim()
+          : null,
     );
 
     await TrainingData().addTemplate(template);
@@ -211,6 +217,9 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
       arrowsPerRound: _arrowsPerRound,
       targetType: targetValue,
       inputMethod: _inputMethod,
+      distance: _distanceController.text.trim().isNotEmpty
+          ? _distanceController.text.trim()
+          : null,
       scores: {},
       trainingName: _trainingNameController.text.trim().isNotEmpty
           ? _trainingNameController.text.trim()
@@ -455,6 +464,67 @@ class _SetupTrainingScreenState extends State<SetupTrainingScreen> {
                       controller: _trainingNameController,
                       decoration: InputDecoration(
                         hintText: 'Contoh: Latihan 50M, Tournament Prep',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF10B982),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF10B982),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF10B982),
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Jarak Field
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFF10B982), width: 2),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.straighten, color: Color(0xFF10B982)),
+                        const SizedBox(width: 12),
+                        const Text(
+                          'Jarak',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _distanceController,
+                      decoration: InputDecoration(
+                        hintText: 'Contoh: 30m, 50m, 70m',
                         filled: true,
                         fillColor: Colors.white,
                         border: OutlineInputBorder(

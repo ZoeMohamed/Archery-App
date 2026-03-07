@@ -155,6 +155,7 @@ class SupabaseTrainingAdapter {
       arrowsPerRound: arrowsPerEnd,
       targetType: _resolveLocalTargetType(dbSession, details),
       inputMethod: dbSession.inputMethod,
+      distance: dbSession.distance,
       scores: scores,
       hitCoordinates: restoredCoordinates,
       trainingName: _normalizeTrainingName(dbSession),

@@ -190,42 +190,64 @@ class _TrainingResultScreenState extends State<TrainingResultScreen>
         // Stats Grid
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
-            childAspectRatio: 1.0,
+          child: Column(
             children: [
-              _buildStatCard(
-                icon: Icons.star,
-                iconColor: Colors.orange,
-                value: totalScore.toString(),
-                label: 'Total Score',
-                valueColor: Colors.orange,
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                childAspectRatio: 1.0,
+                children: [
+                  _buildStatCard(
+                    icon: Icons.star,
+                    iconColor: Colors.orange,
+                    value: totalScore.toString(),
+                    label: 'Total Score',
+                    valueColor: Colors.orange,
+                  ),
+                  _buildStatCard(
+                    icon: Icons.trending_up,
+                    iconColor: Colors.blue,
+                    value: avgScore.toStringAsFixed(2),
+                    label: 'Average',
+                    valueColor: Colors.blue,
+                  ),
+                  _buildStatCard(
+                    icon: Icons.adjust,
+                    iconColor: Colors.green,
+                    value: '${accuracy.toStringAsFixed(1)}%',
+                    label: 'Accuracy',
+                    valueColor: Colors.green,
+                  ),
+                  _buildStatCard(
+                    icon: Icons.arrow_forward,
+                    iconColor: Colors.purple,
+                    value: totalArrows.toString(),
+                    label: 'Arrows',
+                    valueColor: Colors.purple,
+                  ),
+                ],
               ),
-              _buildStatCard(
-                icon: Icons.trending_up,
-                iconColor: Colors.blue,
-                value: avgScore.toStringAsFixed(2),
-                label: 'Average',
-                valueColor: Colors.blue,
-              ),
-              _buildStatCard(
-                icon: Icons.adjust,
-                iconColor: Colors.green,
-                value: '${accuracy.toStringAsFixed(1)}%',
-                label: 'Accuracy',
-                valueColor: Colors.green,
-              ),
-              _buildStatCard(
-                icon: Icons.arrow_forward,
-                iconColor: Colors.purple,
-                value: totalArrows.toString(),
-                label: 'Arrows',
-                valueColor: Colors.purple,
-              ),
+              // Jarak Card - Centered below
+              if (widget.session.distance != null &&
+                  widget.session.distance!.isNotEmpty)
+                Center(
+                  child: SizedBox(
+                    width: MediaQuery.of(context).size.width / 2 - 28,
+                    child: AspectRatio(
+                      aspectRatio: 1.0,
+                      child: _buildStatCard(
+                        icon: Icons.straighten,
+                        iconColor: const Color(0xFF10B982),
+                        value: widget.session.distance!,
+                        label: 'Jarak',
+                        valueColor: const Color(0xFF10B982),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),

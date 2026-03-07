@@ -99,6 +99,15 @@ class TrainingConfirmationScreen extends StatelessWidget {
                           'Jenis Target',
                           session.targetType,
                         ),
+                        if (session.distance != null &&
+                            session.distance!.isNotEmpty) ...[
+                          const Divider(height: 24),
+                          _buildInfoRow(
+                            Icons.straighten,
+                            'Jarak',
+                            session.distance!,
+                          ),
+                        ],
                       ],
                     ),
                   ),

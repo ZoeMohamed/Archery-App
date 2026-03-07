@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../utils/training_data.dart';
 
 class TotalRambahanTableScreen extends StatelessWidget {
@@ -149,15 +150,40 @@ class TotalRambahanTableScreen extends StatelessWidget {
                     topRight: Radius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'Total per Rambahan',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Image.asset(
+                    'image/Logo 2.png',
+                    height: 50,
+                    fit: BoxFit.contain,
                   ),
                 ),
               ),
+              // Training Info Section
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildInfoRow(
+                      'Latihan tgl',
+                      DateFormat('d MMM yyyy').format(session.date),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildInfoRow(
+                      'Jarak',
+                      session.distance?.isNotEmpty == true
+                          ? session.distance!
+                          : '-',
+                    ),
+                    const SizedBox(height: 8),
+                    _buildInfoRow('Jml rambahan', '${session.numberOfRounds}'),
+                    const SizedBox(height: 8),
+                    _buildInfoRow('Jml arrow', '${session.arrowsPerRound}'),
+                  ],
+                ),
+              ),
+              const Divider(height: 1, thickness: 1),
               // Table
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -187,19 +213,16 @@ class TotalRambahanTableScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // R1 to Rx columns
-                      ...List.generate(
-                        session.numberOfRounds,
-                        (index) => DataColumn(
-                          label: Container(
-                            width: 55,
-                            alignment: Alignment.center,
-                            child: Text(
-                              'R${index + 1}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
+                      // Rank column
+                      DataColumn(
+                        label: Container(
+                          width: 55,
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'Rank',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
                             ),
                           ),
                         ),
@@ -218,16 +241,19 @@ class TotalRambahanTableScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // Rank column
-                      DataColumn(
-                        label: Container(
-                          width: 55,
-                          alignment: Alignment.center,
-                          child: const Text(
-                            'Rank',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                      // R1 to Rx columns
+                      ...List.generate(
+                        session.numberOfRounds,
+                        (index) => DataColumn(
+                          label: Container(
+                            width: 55,
+                            alignment: Alignment.center,
+                            child: Text(
+                              'R${index + 1}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
                             ),
                           ),
                         ),
@@ -252,43 +278,6 @@ class TotalRambahanTableScreen extends StatelessWidget {
                                   fontSize: 13,
                                 ),
                                 overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                          // Round totals
-                          ...List.generate(
-                            session.numberOfRounds,
-                            (roundIndex) {
-                              final roundTotal =
-                                  _getRoundTotal(playerName, roundIndex);
-                              return DataCell(
-                                Container(
-                                  width: 55,
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    roundTotal.toString(),
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w500,
-                                      color: _getScoreColor(roundTotal),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                          // Grand Total
-                          DataCell(
-                            Container(
-                              width: 60,
-                              alignment: Alignment.center,
-                              child: Text(
-                                grandTotal.toString(),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF10B982),
-                                ),
                               ),
                             ),
                           ),
@@ -317,6 +306,43 @@ class TotalRambahanTableScreen extends StatelessWidget {
                               ),
                             ),
                           ),
+                          // Grand Total
+                          DataCell(
+                            Container(
+                              width: 60,
+                              alignment: Alignment.center,
+                              child: Text(
+                                grandTotal.toString(),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF10B982),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Round totals
+                          ...List.generate(
+                            session.numberOfRounds,
+                            (roundIndex) {
+                              final roundTotal =
+                                  _getRoundTotal(playerName, roundIndex);
+                              return DataCell(
+                                Container(
+                                  width: 55,
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    roundTotal.toString(),
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: _getScoreColor(roundTotal),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       );
                     }).toList(),
@@ -327,6 +353,34 @@ class TotalRambahanTableScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(
+            '$label:',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF10B982),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

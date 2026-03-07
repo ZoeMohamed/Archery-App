@@ -24,7 +24,7 @@ class SupabaseTrainingService {
     final dbSession = SupabaseTrainingAdapter.toDbSession(
       session,
       userId: user.id,
-      distance: distance,
+      distance: distance ?? session.distance,
     );
     final payload = _cleanPayload(dbSession.toJson());
 

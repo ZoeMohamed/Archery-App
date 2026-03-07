@@ -14,6 +14,7 @@ class TrainingSession {
   int arrowsPerRound;
   String targetType;
   String inputMethod; // 'arrow_values' or 'target_face'
+  String? distance; // Jarak latihan (contoh: "30m", "50m")
   Map<String, List<List<String>>> scores; // playerName -> rounds -> arrows
   Map<String, List<List<Map<String, double>>>>?
   hitCoordinates; // playerName -> rounds -> arrows -> {x, y}
@@ -29,6 +30,7 @@ class TrainingSession {
     required this.arrowsPerRound,
     required this.targetType,
     this.inputMethod = 'arrow_values',
+    this.distance,
     required this.scores,
     this.hitCoordinates,
     this.trainingName,
@@ -81,6 +83,7 @@ class TrainingSession {
       'arrowsPerRound': arrowsPerRound,
       'targetType': targetType,
       'inputMethod': inputMethod,
+      'distance': distance,
       'scores': scores,
       'hitCoordinates': hitCoordinates,
       'trainingName': trainingName,
@@ -114,6 +117,7 @@ class TrainingSession {
       arrowsPerRound: json['arrowsPerRound'],
       targetType: json['targetType'],
       inputMethod: json['inputMethod'] ?? 'arrow_values',
+      distance: json['distance'],
       scores: Map<String, List<List<String>>>.from(
         (json['scores'] as Map).map(
           (key, value) => MapEntry(
@@ -138,6 +142,7 @@ class TrainingTemplate {
   int arrowsPerRound;
   String targetType;
   String inputMethod;
+  String? distance; // Jarak latihan
 
   TrainingTemplate({
     required this.id,
@@ -148,6 +153,7 @@ class TrainingTemplate {
     required this.arrowsPerRound,
     required this.targetType,
     this.inputMethod = 'arrow_values',
+    this.distance,
   });
 
   Map<String, dynamic> toJson() {
@@ -160,6 +166,7 @@ class TrainingTemplate {
       'arrowsPerRound': arrowsPerRound,
       'targetType': targetType,
       'inputMethod': inputMethod,
+      'distance': distance,
     };
   }
 
@@ -173,6 +180,7 @@ class TrainingTemplate {
       arrowsPerRound: json['arrowsPerRound'],
       targetType: json['targetType'],
       inputMethod: json['inputMethod'] ?? 'arrow_values',
+      distance: json['distance'],
     );
   }
 }
@@ -347,6 +355,7 @@ class TrainingData {
       arrowsPerRound: remote.arrowsPerRound,
       targetType: _mergeTargetType(local.targetType, remote.targetType),
       inputMethod: remote.inputMethod,
+      distance: remote.distance ?? local.distance,
       scores: remote.scores,
       hitCoordinates: remote.hitCoordinates,
       trainingName: remote.trainingName ?? local.trainingName,
