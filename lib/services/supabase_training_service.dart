@@ -79,17 +79,10 @@ class SupabaseTrainingService {
 
     final detailsBySession = <String, List<DbScoreDetail>>{};
     if (sessionIds.isNotEmpty) {
-      final detailRows = await _client
-          .from('score_details')
-          .select()
-          .inFilter('session_id', sessionIds)
-          .order('end_number', ascending: true)
-          .order('arrow_number', ascending: true);
+      final detailRows = await _fetchAllScoreDetails(sessionIds);
 
-      for (final row in detailRows as List) {
-        final detail = DbScoreDetail.fromJson(
-          Map<String, dynamic>.from(row as Map),
-        );
+      for (final row in detailRows) {
+        final detail = DbScoreDetail.fromJson(row);
         detailsBySession.putIfAbsent(detail.sessionId, () => []).add(detail);
       }
     }
@@ -98,6 +91,38 @@ class SupabaseTrainingService {
       final details = detailsBySession[session.id ?? ''] ?? [];
       return SupabaseTrainingAdapter.toLocalSession(session, details);
     }).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchAllScoreDetails(
+    List<String> sessionIds,
+  ) async {
+    const pageSize = 1000;
+    final collected = <Map<String, dynamic>>[];
+    var from = 0;
+
+    while (true) {
+      final page = await _client
+          .from('score_details')
+          .select()
+          .inFilter('session_id', sessionIds)
+          .order('session_id', ascending: true)
+          .order('end_number', ascending: true)
+          .order('arrow_number', ascending: true)
+          .range(from, from + pageSize - 1);
+
+      final rows = List<Map<String, dynamic>>.from(page as List);
+      if (rows.isEmpty) {
+        break;
+      }
+
+      collected.addAll(rows);
+      if (rows.length < pageSize) {
+        break;
+      }
+      from += pageSize;
+    }
+
+    return collected;
   }
 
   Future<int> syncPendingSessions(List<TrainingSession> sessions) async {
