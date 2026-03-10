@@ -36,38 +36,39 @@ class _InputScoringScreenState extends State<InputScoringScreen>
       if (!_tabController.indexIsChanging) {
         setState(() {
           selectedPlayerIndex = _tabController.index;
-          _initializeScoresForPlayer();
           _findCurrentPosition();
         });
       }
     });
-    _initializeScoresForPlayer();
+    _initializeAllPlayers();
     _findCurrentPosition();
   }
 
-  void _initializeScoresForPlayer() {
-    String playerName = session.playerNames[selectedPlayerIndex];
-    if (session.scores[playerName] == null) {
-      session.scores[playerName] = [];
-    }
-    // Initialize all rounds with empty scores
-    while (session.scores[playerName]!.length < session.numberOfRounds) {
-      session.scores[playerName]!.add(
-        List.generate(session.arrowsPerRound, (_) => ''),
-      );
-    }
-
-    // Initialize hit coordinates for target face input
-    if (session.inputMethod == 'target_face') {
-      session.hitCoordinates ??= {};
-      if (session.hitCoordinates![playerName] == null) {
-        session.hitCoordinates![playerName] = [];
+  void _initializeAllPlayers() {
+    // Initialize ALL players' scores upfront to prevent data loss
+    for (var playerName in session.playerNames) {
+      if (session.scores[playerName] == null) {
+        session.scores[playerName] = [];
       }
-      while (session.hitCoordinates![playerName]!.length <
-          session.numberOfRounds) {
-        session.hitCoordinates![playerName]!.add(
-          List.generate(session.arrowsPerRound, (_) => {'x': 0.0, 'y': 0.0}),
+      // Initialize all rounds with empty scores
+      while (session.scores[playerName]!.length < session.numberOfRounds) {
+        session.scores[playerName]!.add(
+          List.generate(session.arrowsPerRound, (_) => ''),
         );
+      }
+
+      // Initialize hit coordinates for target face input
+      if (session.inputMethod == 'target_face') {
+        session.hitCoordinates ??= {};
+        if (session.hitCoordinates![playerName] == null) {
+          session.hitCoordinates![playerName] = [];
+        }
+        while (session.hitCoordinates![playerName]!.length <
+            session.numberOfRounds) {
+          session.hitCoordinates![playerName]!.add(
+            List.generate(session.arrowsPerRound, (_) => {'x': 0.0, 'y': 0.0}),
+          );
+        }
       }
     }
   }
