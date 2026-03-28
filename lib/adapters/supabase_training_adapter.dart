@@ -86,6 +86,7 @@ class SupabaseTrainingAdapter {
     DbTrainingSession dbSession,
     List<DbScoreDetail> details,
   ) {
+    final resolvedSessionDate = _resolveSessionDateTime(dbSession);
     final playerNames = _resolvePlayerNames(dbSession, details);
     final resolvedNames = playerNames.isEmpty ? ['Saya'] : playerNames;
     final totalEnds = dbSession.totalEnds;
@@ -144,11 +145,7 @@ class SupabaseTrainingAdapter {
     return TrainingSession(
       id: dbSession.id ?? '',
       supabaseId: dbSession.id,
-      date: DateTime(
-        dbSession.trainingDate.year,
-        dbSession.trainingDate.month,
-        dbSession.trainingDate.day,
-      ),
+      date: resolvedSessionDate,
       numberOfPlayers: numberOfPlayers > 0 ? numberOfPlayers : 1,
       playerNames: resolvedNames,
       numberOfRounds: totalEnds,
@@ -159,6 +156,38 @@ class SupabaseTrainingAdapter {
       scores: scores,
       hitCoordinates: restoredCoordinates,
       trainingName: _normalizeTrainingName(dbSession),
+    );
+  }
+
+  static DateTime _resolveSessionDateTime(DbTrainingSession dbSession) {
+    final rawBaseDate = dbSession.trainingDate;
+    final baseDate = rawBaseDate.isUtc ? rawBaseDate.toLocal() : rawBaseDate;
+    final hasTimeComponent =
+        baseDate.hour != 0 ||
+        baseDate.minute != 0 ||
+        baseDate.second != 0 ||
+        baseDate.millisecond != 0 ||
+        baseDate.microsecond != 0;
+
+    if (hasTimeComponent) {
+      return baseDate;
+    }
+
+    final createdAt = dbSession.createdAt;
+    if (createdAt == null) {
+      return baseDate;
+    }
+
+    final createdAtLocal = createdAt.isUtc ? createdAt.toLocal() : createdAt;
+    return DateTime(
+      baseDate.year,
+      baseDate.month,
+      baseDate.day,
+      createdAtLocal.hour,
+      createdAtLocal.minute,
+      createdAtLocal.second,
+      createdAtLocal.millisecond,
+      createdAtLocal.microsecond,
     );
   }
 

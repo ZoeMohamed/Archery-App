@@ -4,7 +4,7 @@ class DbHelpers {
       return null;
     }
     if (value is DateTime) {
-      return DateTime(value.year, value.month, value.day);
+      return value;
     }
     if (value is String && value.isNotEmpty) {
       return DateTime.tryParse(value);

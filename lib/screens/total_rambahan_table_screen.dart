@@ -40,6 +40,14 @@ class TotalRambahanTableScreen extends StatelessWidget {
     return sum;
   }
 
+  // Calculate average per round for a player
+  double _getAveragePerRound(String playerName) {
+    if (session.numberOfRounds <= 0) {
+      return 0;
+    }
+    return _getGrandTotal(playerName) / session.numberOfRounds;
+  }
+
   // Get players sorted by rank (highest grand total first)
   List<Map<String, dynamic>> _getPlayersWithRank() {
     List<Map<String, dynamic>> playerData = [];
@@ -167,7 +175,7 @@ class TotalRambahanTableScreen extends StatelessWidget {
                   children: [
                     _buildInfoRow(
                       'Latihan tgl',
-                      DateFormat('d MMM yyyy').format(session.date),
+                      DateFormat('d MMM yyyy , HH:mm').format(session.date),
                     ),
                     const SizedBox(height: 8),
                     _buildInfoRow(
@@ -241,6 +249,20 @@ class TotalRambahanTableScreen extends StatelessWidget {
                           ),
                         ),
                       ),
+                      // Average column
+                      DataColumn(
+                        label: Container(
+                          width: 60,
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'Avg',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ),
                       // R1 to Rx columns
                       ...List.generate(
                         session.numberOfRounds,
@@ -263,6 +285,7 @@ class TotalRambahanTableScreen extends StatelessWidget {
                       final playerName = playerData['name'] as String;
                       final grandTotal = playerData['grandTotal'] as int;
                       final rank = playerData['rank'] as int;
+                      final avgPerRound = _getAveragePerRound(playerName);
 
                       return DataRow(
                         cells: [
@@ -317,6 +340,21 @@ class TotalRambahanTableScreen extends StatelessWidget {
                                   fontSize: 13,
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF10B982),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Average per round
+                          DataCell(
+                            Container(
+                              width: 60,
+                              alignment: Alignment.center,
+                              child: Text(
+                                avgPerRound.toStringAsFixed(2),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
                                 ),
                               ),
                             ),

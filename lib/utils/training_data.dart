@@ -345,10 +345,11 @@ class TrainingData {
   }
 
   TrainingSession _mergeSession(TrainingSession local, TrainingSession remote) {
+    final mergedDate = _mergeSessionDateTime(local.date, remote.date);
     return TrainingSession(
       id: local.id,
       supabaseId: remote.supabaseId ?? local.supabaseId,
-      date: remote.date,
+      date: mergedDate,
       numberOfPlayers: remote.numberOfPlayers,
       playerNames: remote.playerNames,
       numberOfRounds: remote.numberOfRounds,
@@ -360,6 +361,38 @@ class TrainingData {
       hitCoordinates: remote.hitCoordinates,
       trainingName: remote.trainingName ?? local.trainingName,
     );
+  }
+
+  DateTime _mergeSessionDateTime(DateTime localDate, DateTime remoteDate) {
+    final remoteHasTime =
+        remoteDate.hour != 0 ||
+        remoteDate.minute != 0 ||
+        remoteDate.second != 0 ||
+        remoteDate.millisecond != 0 ||
+        remoteDate.microsecond != 0;
+    if (remoteHasTime) {
+      return remoteDate;
+    }
+
+    final sameCalendarDate =
+        localDate.year == remoteDate.year &&
+        localDate.month == remoteDate.month &&
+        localDate.day == remoteDate.day;
+    if (!sameCalendarDate) {
+      return remoteDate;
+    }
+
+    final localHasTime =
+        localDate.hour != 0 ||
+        localDate.minute != 0 ||
+        localDate.second != 0 ||
+        localDate.millisecond != 0 ||
+        localDate.microsecond != 0;
+    if (localHasTime) {
+      return localDate;
+    }
+
+    return remoteDate;
   }
 
   String _mergeTargetType(String localType, String remoteType) {
