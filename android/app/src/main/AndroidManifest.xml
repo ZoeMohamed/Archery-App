@@ -13,7 +13,7 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     
     <application
-        android:label="al_ihsan_archery"
+        android:label="Al Ihsan Archery"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
