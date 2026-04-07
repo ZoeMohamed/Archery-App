@@ -1,4 +1,4 @@
-package com.example.al_ihsan_archery
+package com.alihsan.archery
 
 import io.flutter.embedding.android.FlutterActivity
 
